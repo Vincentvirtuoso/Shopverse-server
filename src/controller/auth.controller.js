@@ -11,12 +11,21 @@ import crypto from "crypto";
 // Cookie settings
 const secure = process.env.NODE_ENV === "production";
 
-const createCookieOptions = (days) => ({
-  expires: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
-  httpOnly: true,
-  secure,
-  sameSite: secure ? "none" : "strict",
-});
+const createCookieOptions = (days) => {
+  const options = {
+    expires: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+    httpOnly: true,
+    secure,
+    sameSite: secure ? "none" : "lax",
+  };
+
+  // Add domain if in production and COOKIE_DOMAIN is set
+  if (secure && process.env.COOKIE_DOMAIN) {
+    options.domain = process.env.COOKIE_DOMAIN;
+  }
+
+  return options;
+};
 
 // ===== LOGIN =====
 export const login = catchAsync(async (req, res, next) => {
@@ -110,8 +119,18 @@ export const login = catchAsync(async (req, res, next) => {
 });
 
 export const logout = catchAsync(async (req, res) => {
-  res.clearCookie("token");
-  res.clearCookie("refreshToken");
+  const cookieOptions = {
+    httpOnly: true,
+    secure,
+    sameSite: secure ? "none" : "lax",
+  };
+
+  if (secure && process.env.COOKIE_DOMAIN) {
+    cookieOptions.domain = process.env.COOKIE_DOMAIN;
+  }
+
+  res.clearCookie("token", cookieOptions);
+  res.clearCookie("refreshToken", cookieOptions);
 
   res.status(200).json({
     success: true,
@@ -298,6 +317,7 @@ export const resendVerificationEmail = catchAsync(async (req, res, next) => {
   }
 });
 
+// ===== FIX: REFRESH TOKEN =====
 export const refreshToken = catchAsync(async (req, res, next) => {
   const { refreshToken } = req.cookies;
 
@@ -327,17 +347,17 @@ export const refreshToken = catchAsync(async (req, res, next) => {
         isSeller: user.isSeller,
       },
       process.env.JWT_SECRET,
-      { v_tokenExpiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" } // FIX: was v_tokenExpiresIn
     );
 
-    // Set new cookie
+    // FIX: Set the ACCESS token cookie (not refreshToken)
     res.cookie("token", newToken, createCookieOptions(7));
 
     res.status(200).json({
       success: true,
       message: "Token refreshed successfully",
       data: {
-        v_tokenExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
+        expiresIn: process.env.JWT_EXPIRES_IN || "7d",
       },
     });
   } catch (error) {
