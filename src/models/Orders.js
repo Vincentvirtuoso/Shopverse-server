@@ -1,7 +1,6 @@
-const mongoose = require("mongoose");
-const { Schema } = mongoose;
+import mongoose from "mongoose";
 
-const OrderSchema = new Schema(
+const OrderSchema = new mongoose.Schema(
   {
     orderNumber: {
       type: String,
@@ -289,18 +288,10 @@ const OrderSchema = new Schema(
   }
 );
 
-// ============================================
-// INDEXES for Performance
-// ============================================
-
 OrderSchema.index({ "customer.user": 1, "dates.placedAt": -1 });
 OrderSchema.index({ status: 1, "dates.placedAt": -1 });
 OrderSchema.index({ "payment.status": 1 });
 OrderSchema.index({ "customer.email": 1 });
-
-// ============================================
-// VIRTUAL PROPERTIES
-// ============================================
 
 // Full customer name
 OrderSchema.virtual("customer.fullName").get(function () {
@@ -320,10 +311,6 @@ OrderSchema.virtual("isReturnable").get(function () {
     (Date.now() - this.dates.deliveredAt) / (1000 * 60 * 60 * 24);
   return daysSinceDelivery <= returnWindow;
 });
-
-// ============================================
-// INSTANCE METHODS
-// ============================================
 
 // Add status update
 OrderSchema.methods.updateStatus = function (newStatus, note, updatedBy) {
@@ -386,11 +373,6 @@ OrderSchema.methods.generateInvoice = function () {
   };
 };
 
-// ============================================
-// STATIC METHODS
-// ============================================
-
-// Get orders by customer
 OrderSchema.statics.findByCustomer = function (userId, options = {}) {
   const query = {
     "customer.user": userId,
@@ -432,11 +414,6 @@ OrderSchema.statics.getRevenueForPeriod = async function (startDate, endDate) {
   ]);
 };
 
-// ============================================
-// MIDDLEWARE (Hooks)
-// ============================================
-
-// Pre-save: Generate order number if not exists
 OrderSchema.pre("save", function (next) {
   if (!this.orderNumber) {
     const date = new Date();

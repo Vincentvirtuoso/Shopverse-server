@@ -15,7 +15,10 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-const allowedOrigins = ["http://localhost:5173", "shopverse-5bjp.onrender.com"];
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://shopverse-5bjp.onrender.com",
+];
 
 app.use(express.json());
 app.use(helmet());
