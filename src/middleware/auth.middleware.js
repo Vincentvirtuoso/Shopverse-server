@@ -3,6 +3,11 @@ import User from "../models/User.js";
 import AppError from "../utils/AppError.js";
 import catchAsync from "../utils/catchAsync.js";
 
+import jwt from "jsonwebtoken";
+import User from "../models/User.js";
+import AppError from "../utils/AppError.js";
+import catchAsync from "../utils/catchAsync.js";
+
 export const protect = catchAsync(async (req, res, next) => {
   let token;
 
@@ -11,25 +16,73 @@ export const protect = catchAsync(async (req, res, next) => {
   }
 
   if (!token) {
-    return next(new AppError("You are not logged in", 401, "UNAUTHORIZED"));
-  }
-
-  // Verify token
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-  // Check user still exists
-  const user = await User.findById(decoded.id);
-  if (!user) {
-    return next(new AppError("User no longer exists", 401, "UNAUTHORIZED"));
-  }
-
-  // Optional: check if password changed after token was issued
-  if (user.changedPasswordAfter(decoded.iat)) {
     return next(
       new AppError(
-        "Password recently changed. Please login again.",
+        "You are not logged in. Please log in to access this resource.",
         401,
         "UNAUTHORIZED"
+      )
+    );
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    if (error.name === "JsonWebTokenError") {
+      return next(
+        new AppError(
+          "Invalid token. Please log in again.",
+          401,
+          "INVALID_TOKEN"
+        )
+      );
+    }
+    if (error.name === "TokenExpiredError") {
+      return next(
+        new AppError(
+          "Your token has expired. Please log in again.",
+          401,
+          "TOKEN_EXPIRED"
+        )
+      );
+    }
+    return next(
+      new AppError(
+        "Authentication failed. Please log in again.",
+        401,
+        "AUTH_FAILED"
+      )
+    );
+  }
+
+  const user = await User.findById(decoded.id);
+  if (!user) {
+    return next(
+      new AppError(
+        "The user belonging to this token no longer exists.",
+        401,
+        "USER_NOT_FOUND"
+      )
+    );
+  }
+
+  if (!user.isActive) {
+    return next(
+      new AppError(
+        "Your account has been deactivated. Contact support.",
+        403,
+        "ACCOUNT_DEACTIVATED"
+      )
+    );
+  }
+
+  if (user.changedPasswordAfter && user.changedPasswordAfter(decoded.iat)) {
+    return next(
+      new AppError(
+        "Password recently changed. Please log in again.",
+        401,
+        "PASSWORD_CHANGED"
       )
     );
   }
