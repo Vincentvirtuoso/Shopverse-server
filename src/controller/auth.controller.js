@@ -19,7 +19,6 @@ const createCookieOptions = (days) => {
     sameSite: secure ? "none" : "lax",
   };
 
-  // Add domain if in production and COOKIE_DOMAIN is set
   if (secure && process.env.COOKIE_DOMAIN) {
     options.domain = process.env.COOKIE_DOMAIN;
   }
@@ -113,6 +112,8 @@ export const login = catchAsync(async (req, res, next) => {
     message: "Login successful",
     data: {
       user: userData,
+      token,
+      refreshToken,
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
     },
   });
@@ -317,9 +318,8 @@ export const resendVerificationEmail = catchAsync(async (req, res, next) => {
   }
 });
 
-// ===== FIX: REFRESH TOKEN =====
 export const refreshToken = catchAsync(async (req, res, next) => {
-  const { refreshToken } = req.cookies;
+  const { refreshToken } = req.body;
 
   if (!refreshToken) {
     return next(new AppError("Refresh token required", 401, "TOKEN_REQUIRED"));
@@ -347,16 +347,15 @@ export const refreshToken = catchAsync(async (req, res, next) => {
         isSeller: user.isSeller,
       },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" } // FIX: was v_tokenExpiresIn
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
-    // FIX: Set the ACCESS token cookie (not refreshToken)
-    res.cookie("token", newToken, createCookieOptions(7));
-
+    // CHANGE: Send new token in response body
     res.status(200).json({
       success: true,
       message: "Token refreshed successfully",
       data: {
+        token: newToken,
         expiresIn: process.env.JWT_EXPIRES_IN || "7d",
       },
     });

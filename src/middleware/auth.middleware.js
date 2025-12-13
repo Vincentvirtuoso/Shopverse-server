@@ -11,8 +11,11 @@ import catchAsync from "../utils/catchAsync.js";
 export const protect = catchAsync(async (req, res, next) => {
   let token;
 
-  if (req.cookies && req.cookies.token) {
-    token = req.cookies.token;
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
+    token = req.headers.authorization.split(" ")[1];
   }
 
   if (!token) {
@@ -25,6 +28,7 @@ export const protect = catchAsync(async (req, res, next) => {
     );
   }
 
+  // Verify token with proper error handling
   let decoded;
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -56,6 +60,7 @@ export const protect = catchAsync(async (req, res, next) => {
     );
   }
 
+  // Check if user still exists
   const user = await User.findById(decoded.id);
   if (!user) {
     return next(
@@ -90,7 +95,6 @@ export const protect = catchAsync(async (req, res, next) => {
   req.user = user;
   next();
 });
-
 export const checkActive = (req, res, next) => {
   if (!req.user.isActive) {
     return next(new AppError("Account is deactivated", 403, "FORBIDDEN"));
