@@ -3,11 +3,6 @@ import User from "../models/User.js";
 import AppError from "../utils/AppError.js";
 import catchAsync from "../utils/catchAsync.js";
 
-import jwt from "jsonwebtoken";
-import User from "../models/User.js";
-import AppError from "../utils/AppError.js";
-import catchAsync from "../utils/catchAsync.js";
-
 export const protect = catchAsync(async (req, res, next) => {
   let token;
 
