@@ -16,10 +16,10 @@ const router = e.Router();
 
 router.post("/login", validate(loginSchema), login);
 router.post("/register", validate(registerSchema), register);
-router.post("/logout", logout);
 router.post("/refresh-token", refreshToken);
 router.get("/verify-email/", verifyEmail);
 router.post("/resend-verification", resendVerificationEmail);
+router.post("/logout", protect, logout);
 router.get("/me", protect, getUser);
 
 export default router;

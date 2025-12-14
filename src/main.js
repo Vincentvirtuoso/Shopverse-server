@@ -61,9 +61,8 @@ app.use(
 );
 
 // Logging
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+app.use(morgan(process.env.NODE_ENV !== "production" && "dev"));
 
-// Trust proxy (IMPORTANT for production on Render, Heroku, etc.)
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
