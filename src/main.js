@@ -2,11 +2,12 @@ import express from "express";
 import morgan from "morgan";
 import helmet from "helmet";
 import dotenv from "dotenv";
+import cors from "cors";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/auth.route.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import cookieParser from "cookie-parser";
-// import {} from 'express-rate-limit'
+// import rateLimit from "express-rate-limit";
 
 dotenv.config();
 connectDB();
@@ -19,38 +20,87 @@ const allowedOrigins = [
   "https://shopverse-5bjp.onrender.com",
 ];
 
-app.use(express.json());
-app.use(helmet());
+// CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or Postman)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  exposedHeaders: ["set-cookie"],
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Parse cookies before any routes
 app.use(cookieParser());
-app.use(express.urlencoded({ extended: true }));
+
+// Body parsers
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Security headers
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
+
+// Logging
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,DELETE,PATCH,OPTIONS"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With"
-  );
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-  next();
-});
+// Optional: Rate limiting
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // limit each IP to 100 requests per windowMs
+//   message: "Too many requests from this IP, please try again later.",
+// });
+// app.use("/api/", limiter);
 
+// Routes
 app.use("/api/auth", authRoutes);
 
+// Health check
 app.get("/", (req, res) => {
-  res.send("Server is running");
+  res.json({
+    success: true,
+    message: "Server is running",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    success: true,
+    status: "healthy",
+    environment: process.env.NODE_ENV,
+  });
+});
+
+// 404 handler
+app.all("*", (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.originalUrl} not found`,
+  });
 });
 
 app.use(errorHandler);
 
+// Start server
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`
+    🚀 Server is running on port ${PORT}
+    📝 Environment: ${process.env.NODE_ENV || "development"}
+    🌐 Allowed origins: ${allowedOrigins.join(", ")}
+  `);
 });

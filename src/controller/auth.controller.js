@@ -319,7 +319,8 @@ export const resendVerificationEmail = catchAsync(async (req, res, next) => {
 });
 
 export const refreshToken = catchAsync(async (req, res, next) => {
-  const { refreshToken } = req.body;
+  // Check both cookies and body for refresh token
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
   if (!refreshToken) {
     return next(new AppError("Refresh token required", 401, "TOKEN_REQUIRED"));
@@ -350,11 +351,34 @@ export const refreshToken = catchAsync(async (req, res, next) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
-    // CHANGE: Send new token in response body
+    // Set new token in cookie
+    res.cookie("token", newToken, createCookieOptions(7));
+
+    // Build user data
+    const userData = {
+      id: user._id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: user.fullName,
+      phoneNumber: user.phoneNumber,
+      profileImage: user.profileImage,
+      role: user.role,
+      isEmailVerified: user.isEmailVerified,
+      isPhoneVerified: user.isPhoneVerified,
+      isActive: user.isActive,
+      isSeller: user.isSeller,
+      preferences: user.preferences,
+      stats: user.stats,
+      addresses: user.addresses,
+      sellerProfile: user.role === "seller" ? user.sellerProfile : undefined,
+    };
+
     res.status(200).json({
       success: true,
       message: "Token refreshed successfully",
       data: {
+        user: userData,
         token: newToken,
         expiresIn: process.env.JWT_EXPIRES_IN || "7d",
       },

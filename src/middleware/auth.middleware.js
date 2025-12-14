@@ -3,6 +3,11 @@ import User from "../models/User.js";
 import AppError from "../utils/AppError.js";
 import catchAsync from "../utils/catchAsync.js";
 
+import jwt from "jsonwebtoken";
+import User from "../models/User.js";
+import AppError from "../utils/AppError.js";
+import catchAsync from "../utils/catchAsync.js";
+
 export const protect = catchAsync(async (req, res, next) => {
   let token;
 
@@ -11,6 +16,8 @@ export const protect = catchAsync(async (req, res, next) => {
     req.headers.authorization.startsWith("Bearer")
   ) {
     token = req.headers.authorization.split(" ")[1];
+  } else if (req.cookies?.token) {
+    token = req.cookies.token;
   }
 
   if (!token) {
@@ -90,6 +97,7 @@ export const protect = catchAsync(async (req, res, next) => {
   req.user = user;
   next();
 });
+
 export const checkActive = (req, res, next) => {
   if (!req.user.isActive) {
     return next(new AppError("Account is deactivated", 403, "FORBIDDEN"));
