@@ -1,5 +1,5 @@
 import express from "express";
-import morgan from "morgan";
+// import morgan from "morgan";
 import helmet from "helmet";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -61,7 +61,7 @@ app.use(
 );
 
 // Logging
-app.use(morgan(process.env.NODE_ENV !== "production" && "dev"));
+// app.use(morgan(process.env.NODE_ENV !== "production" && "dev"));
 
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
