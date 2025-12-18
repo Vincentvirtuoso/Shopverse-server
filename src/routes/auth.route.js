@@ -9,7 +9,7 @@ import {
   verifyEmail,
 } from "../controller/auth.controller.js";
 import { validate } from "../middleware/validate.js";
-import { loginSchema, registerSchema } from "../validations/user.validation.js";
+import { loginSchema, registerSchema } from "../validators/user.validation.js";
 import { protect } from "../middleware/auth.middleware.js";
 
 const router = e.Router();
