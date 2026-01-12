@@ -26,7 +26,7 @@ const metaSchema = Joi.object({
   keywords: Joi.array().items(Joi.string().trim()),
 });
 
-const urlPattern = /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif)$/i;
+const urlPattern = /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif|avif)$/i;
 
 export const createProductSchema = Joi.object({
   name: Joi.string().required().trim().min(2).max(200),
@@ -49,6 +49,9 @@ export const createProductSchema = Joi.object({
   ),
   category: Joi.string().required().trim().min(1).max(100),
   subCategory: Joi.string().trim().max(100).allow("", null),
+  isFeatured: Joi.boolean().default(false),
+  isNewArrival: Joi.boolean().default(true),
+  inStock: Joi.boolean().default(true),
   stockCount: Joi.number().min(0).default(0),
   availabilityType: Joi.string()
     .valid("in-stock", "limited", "out-of-stock", "pre-order")
@@ -66,12 +69,8 @@ export const createProductSchema = Joi.object({
   weight: weightSchema,
   dimensions: dimensionsSchema,
   shippingInfo: Joi.object({
-    weight: Joi.number().min(0),
-    dimensions: Joi.object({
-      length: Joi.number().min(0),
-      width: Joi.number().min(0),
-      height: Joi.number().min(0),
-    }),
+    deliveryTime: Joi.string().trim(),
+    isFreeShipping: Joi.boolean(),
     shippingClass: Joi.string(),
   }),
   relatedProducts: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)),

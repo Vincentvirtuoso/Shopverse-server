@@ -12,25 +12,129 @@ import {
 
 export const createProduct = async (req, res) => {
   try {
-    const productInfo = JSON.parse(req.body.product);
-    const productAndFiles = { ...productInfo, images: req.files };
-    console.log("files:", req.files);
+    let productInfo = JSON.parse(req.body.product);
 
-    const { error, value } = createProductSchema.validate(productInfo, {
-      abortEarly: false,
+    const forbiddenFields = [
+      "id",
+      "meta?.slug",
+      "shippingInfo.dimensions",
+      "shippingInfo.weight",
+    ];
+
+    forbiddenFields.forEach((field) => {
+      const parts = field.split("?.");
+      if (parts.length === 1) delete productInfo[parts[0]];
+      else if (productInfo[parts[0]]) delete productInfo[parts[0]][parts[1]];
     });
 
-    console.log("Creating product with data:", JSON.parse(req.body.product));
-    if (error) {
-      console.log(error);
+    // Type conversions
+    if (productInfo.price) productInfo.price = Number(productInfo.price);
+    if (productInfo.originalPrice)
+      productInfo.originalPrice = Number(productInfo.originalPrice);
+    if (productInfo.stockCount)
+      productInfo.stockCount = Number(productInfo.stockCount);
+
+    if (productInfo.weight?.value)
+      productInfo.weight.value = Number(productInfo.weight.value);
+
+    if (productInfo.shippingInfo?.weight)
+      productInfo.shippingInfo.weight = Number(productInfo.shippingInfo.weight);
+
+    if (productInfo.shippingInfo?.dimensions) {
+      const dims = productInfo.shippingInfo.dimensions;
+      if (dims.length) dims.length = Number(dims.length);
+      if (dims.width) dims.width = Number(dims.width);
+      if (dims.height) dims.height = Number(dims.height);
+    }
+
+    if (productInfo.dimensions) {
+      const dims = productInfo.dimensions;
+      if (dims.length) dims.length = Number(dims.length);
+      if (dims.width) dims.width = Number(dims.width);
+      if (dims.height) dims.height = Number(dims.height);
+    }
+
+    let mainImageUrl = null;
+    let additionalImageUrls = [];
+
+    console.log("=== FILE UPLOAD DEBUG ===");
+    console.log("req.files:", req.files);
+    console.log("req.body:", req.body);
+
+    if (req.files?.mainImage && req.files.mainImage[0]) {
+      console.log("Uploading main image...");
+      const result = await uploadToCloudinary(
+        req.files.mainImage[0],
+        "products/main"
+      );
+
+      console.log("Main image upload result:", result);
+
+      if (!result.success) {
+        return res.status(500).json({
+          success: false,
+          message: "Main image upload failed",
+          error: result.error,
+        });
+      }
+      mainImageUrl = result.url;
+    } else {
+      // ✅ Main image is required
       return res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: error.details.map((detail) => detail.message),
+        message: "Main image is required",
       });
     }
 
-    // Check if SKU already exists
+    // ✅ Upload additional images
+    if (req.files?.additionalImages && req.files.additionalImages.length > 0) {
+      console.log("Uploading additional images...");
+      const results = await uploadMultipleToCloudinary(
+        req.files.additionalImages,
+        "products/additional"
+      );
+
+      console.log("Additional images upload results:", results);
+
+      // Filter out failed uploads
+      additionalImageUrls = results.filter((r) => r.success).map((r) => r.url);
+    }
+
+    // ✅ Build images array - filter out any undefined/null values
+    const allImages = [mainImageUrl, ...additionalImageUrls].filter(Boolean);
+
+    // Remove duplicates
+    const uniqueImages = [...new Set(allImages)];
+
+    // ----------------------------
+    // Build product object for validation
+    // ----------------------------
+    const productToValidate = {
+      ...productInfo,
+      image: mainImageUrl,
+      images: uniqueImages,
+    };
+
+    console.log("PRODUCT TO VALIDATE:", productToValidate);
+
+    // ----------------------------
+    // Validate
+    // ----------------------------
+    const { error, value } = createProductSchema.validate(productToValidate, {
+      abortEarly: false,
+    });
+
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: error.details.map((d) => d.message),
+      });
+    }
+
+    // ----------------------------
+    // Check SKU uniqueness
+    // ----------------------------
     if (value.sku) {
       const existingProduct = await Product.findOne({ sku: value.sku });
       if (existingProduct) {
@@ -41,60 +145,10 @@ export const createProduct = async (req, res) => {
       }
     }
 
-    // Handle file uploads if present
-    let mainImageUrl = value.image;
-    let additionalImageUrls = value.images || [];
-
-    if (req.files) {
-      // Handle main image
-      if (req.files.mainImage) {
-        const mainImageResult = await uploadToCloudinary(
-          req.files.mainImage[0],
-          "products/main"
-        );
-        if (!mainImageResult.success) {
-          return res.status(500).json({
-            success: false,
-            message: "Failed to upload main image",
-            error: mainImageResult.error,
-          });
-        }
-        mainImageUrl = mainImageResult.url;
-      }
-
-      // Handle additional images
-      if (req.files.additionalImages) {
-        const additionalImagesResult = await uploadMultipleToCloudinary(
-          req.files.additionalImages,
-          "products/additional"
-        );
-
-        const successfulUploads = additionalImagesResult.filter(
-          (img) => img.success
-        );
-        additionalImageUrls = [
-          ...additionalImageUrls,
-          ...successfulUploads.map((img) => img.url),
-        ];
-      }
-    }
-
-    if (!mainImageUrl) {
-      return res.status(400).json({
-        success: false,
-        message: "Main image is required",
-      });
-    }
-
-    const productData = {
-      ...value,
-      image: mainImageUrl,
-      images: [mainImageUrl, ...additionalImageUrls].filter(
-        (url, index, array) => url && array.indexOf(url) === index
-      ),
-    };
-
-    const product = new Product(productData);
+    // ----------------------------
+    // Save product
+    // ----------------------------
+    const product = new Product(value);
     await product.save();
 
     res.status(201).json({
@@ -105,7 +159,6 @@ export const createProduct = async (req, res) => {
   } catch (error) {
     console.error("Error creating product:", error);
 
-    // Handle duplicate key errors
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,

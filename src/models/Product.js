@@ -60,7 +60,8 @@ const productSchema = new mongoose.Schema(
       required: [true, "Main image URL is required."],
       trim: true,
       validate: {
-        validator: (v) => /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif)$/i.test(v),
+        validator: (v) =>
+          /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif|avif)$/i.test(v),
         message: (props) => `${props.value} is not a valid image URL!`,
       },
     },
@@ -68,7 +69,8 @@ const productSchema = new mongoose.Schema(
       {
         type: String,
         validate: {
-          validator: (v) => /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif)$/i.test(v),
+          validator: (v) =>
+            /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif|avif)$/i.test(v),
           message: (props) => `${props.value} is not a valid image URL!`,
         },
       },
@@ -107,6 +109,18 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
       index: true,
+    },
+    isFeatured: {
+      type: Boolean,
+      default: false,
+    },
+    isNewArrival: {
+      type: Boolean,
+      default: true,
+    },
+    inStock: {
+      type: Boolean,
+      default: true,
     },
     tags: [
       {
@@ -161,12 +175,8 @@ const productSchema = new mongoose.Schema(
       },
     },
     shippingInfo: {
-      weight: { type: Number, min: 0 },
-      dimensions: {
-        length: { type: Number, min: 0 },
-        width: { type: Number, min: 0 },
-        height: { type: Number, min: 0 },
-      },
+      isFreeShipping: { type: Boolean },
+      deliveryTime: { type: String },
       shippingClass: { type: String },
     },
     relatedProducts: [
@@ -241,7 +251,7 @@ productSchema.pre("save", function (next) {
     }
   }
 
-  next();
+  // next();
 });
 
 productSchema.methods.getAvailabilityStatus = function () {

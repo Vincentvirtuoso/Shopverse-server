@@ -1,5 +1,4 @@
 import express from "express";
-// import morgan from "morgan";
 import helmet from "helmet";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -41,11 +40,11 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
 app.use(cookieParser());
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+// ❌ REMOVE THESE GLOBAL MIDDLEWARE
+// app.use(express.json({ limit: "10mb" }));
+// app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use(
   helmet({
@@ -65,9 +64,16 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-// app.use("/api/", limiter);
 
-app.use("/api/auth", authRoutes);
+// ✅ Apply body parsers only to routes that need JSON
+app.use(
+  "/api/auth",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ extended: true, limit: "10mb" }),
+  authRoutes
+);
+
+// ✅ Product routes WITHOUT body parsers (Multer will handle it)
 app.use("/api/products", productRoutes);
 
 app.get("/", (req, res) => {
@@ -89,7 +95,6 @@ app.get("/api/health", (req, res) => {
 
 app.use(errorHandler);
 
-// Start server
 app.listen(PORT, () => {
   console.log(`
     🚀 Server is running on port ${PORT}
