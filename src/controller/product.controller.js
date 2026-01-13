@@ -349,6 +349,8 @@ export const getProductById = async (req, res) => {
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(req);
+
     if (!id) {
       return res
         .status(400)
@@ -360,7 +362,7 @@ export const updateProduct = async (req, res) => {
       req.body,
       {
         abortEarly: false,
-        stripUnknown: true, // remove fields not in schema
+        // stripUnknown: true, // remove fields not in schema
       }
     );
 

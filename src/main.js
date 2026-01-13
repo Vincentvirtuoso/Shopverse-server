@@ -43,8 +43,8 @@ app.use(cors(corsOptions));
 app.use(cookieParser());
 
 // ❌ REMOVE THESE GLOBAL MIDDLEWARE
-// app.use(express.json({ limit: "10mb" }));
-// app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use(
   helmet({
