@@ -127,16 +127,37 @@ export const updateProductSchema = Joi.object({
   weight: weightSchema,
   dimensions: dimensionsSchema,
   shippingInfo: Joi.object({
+    isFreeShipping: Joi.boolean(),
+    deliveryTime: Joi.string().allow("", null),
     weight: Joi.number().min(0),
     dimensions: Joi.object({
       length: Joi.number().min(0),
       width: Joi.number().min(0),
       height: Joi.number().min(0),
     }),
-    shippingClass: Joi.string(),
-  }),
+    shippingClass: Joi.string().allow("", null),
+  }).optional(),
+
+  variants: Joi.array().items(
+    Joi.object({
+      _id: Joi.string()
+        .pattern(/^[0-9a-fA-F]{24}$/)
+        .optional(),
+      id: Joi.string()
+        .pattern(/^[0-9a-fA-F]{24}$/)
+        .optional(),
+      name: Joi.string().required(),
+      price: Joi.number().min(0),
+      sku: Joi.string().allow("", null),
+      stockCount: Joi.number().min(0).default(0),
+      attributes: Joi.object().pattern(/^/, Joi.string()),
+    })
+  ),
+
+  inStock: Joi.boolean(),
+  isFeatured: Joi.boolean(),
+  isNewArrival: Joi.boolean(),
   relatedProducts: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)),
-  variants: Joi.array().items(variantSchema),
   meta: metaSchema,
 });
 
