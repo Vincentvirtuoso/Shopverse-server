@@ -106,3 +106,19 @@ export const checkEmailVerified = (req, res, next) => {
   }
   next();
 };
+
+export const requireSuperAdmin = catchAsync(async (req, res, next) => {
+  // First verify the user is authenticated
+  if (!req.user) {
+    return next(new AppError("Authentication required", 401, "AUTH_REQUIRED"));
+  }
+
+  // Check if user is super_admin
+  if (req.user.role !== "super_admin") {
+    return next(
+      new AppError("Super admin privileges required", 403, "FORBIDDEN")
+    );
+  }
+
+  next();
+});

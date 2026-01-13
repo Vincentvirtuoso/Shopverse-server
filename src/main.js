@@ -8,6 +8,7 @@ import { errorHandler } from "./middleware/error.middleware.js";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import productRoutes from "./routes/product.route.js";
+import setupRoutes from "./routes/setupRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -73,8 +74,8 @@ app.use(
   authRoutes
 );
 
-// ✅ Product routes WITHOUT body parsers (Multer will handle it)
 app.use("/api/products", productRoutes);
+app.use("/api/setup", setupRoutes);
 
 app.get("/", (req, res) => {
   res.json({
