@@ -346,125 +346,86 @@ export const getProductById = async (req, res) => {
   }
 };
 
-/**
- * Update product
- */
 export const updateProduct = async (req, res) => {
   try {
-    // Validate product ID
-    const { error: idError, value: idValue } = productIdSchema.validate(
-      req.params
-    );
-    if (idError) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid product ID",
-      });
+    const { id } = req.params;
+    if (!id) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Product ID missing" });
     }
 
-    // Validate request body
-    const { error, value } = updateProductSchema.validate(req.body);
+    // Validate request body using your schema
+    const { error, value: validatedData } = updateProductSchema.validate(
+      req.body,
+      {
+        abortEarly: false,
+        stripUnknown: true, // remove fields not in schema
+      }
+    );
+
     if (error) {
       return res.status(400).json({
         success: false,
         message: "Validation error",
-        errors: error.details.map((detail) => detail.message),
+        errors: error.details.map((d) => d.message),
       });
     }
+    console.log("v:", validatedData);
 
-    // Check if product exists
-    const existingProduct = await Product.findById(idValue.id);
-    if (!existingProduct) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+    // Fetch existing product
+    const product = await Product.findById(id);
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
 
-    // Check if SKU already exists (if being updated)
-    if (value.sku && value.sku !== existingProduct.sku) {
-      const productWithSku = await Product.findOne({ sku: value.sku });
-      if (productWithSku) {
-        return res.status(400).json({
-          success: false,
-          message: "SKU already exists",
-        });
+    // Merge validated data into product
+    Object.assign(product, validatedData);
+
+    // Handle file uploads
+    if (req.files?.mainImage) {
+      const mainImageResult = await uploadToCloudinary(
+        req.files.mainImage[0],
+        "products/main"
+      );
+      if (mainImageResult.success) {
+        product.image = mainImageResult.url;
+        product.images = product.images.filter((img) => img !== product.image);
+        product.images.unshift(mainImageResult.url);
       }
     }
 
-    // Handle file uploads if present
-    if (req.files) {
-      // Handle main image update
-      if (req.files.mainImage) {
-        const mainImageResult = await uploadToCloudinary(
-          req.files.mainImage[0],
-          "products/main"
-        );
-        if (mainImageResult.success) {
-          value.image = mainImageResult.url;
-          // Add to images array if not already present
-          if (!value.images) {
-            value.images = existingProduct.images;
-          }
-          if (!value.images.includes(mainImageResult.url)) {
-            value.images.unshift(mainImageResult.url);
-          }
-        }
-      }
-
-      // Handle additional images
-      if (req.files.additionalImages) {
-        const additionalImagesResult = await uploadMultipleToCloudinary(
-          req.files.additionalImages,
-          "products/additional"
-        );
-
-        const successfulUploads = additionalImagesResult.filter(
-          (img) => img.success
-        );
-        const newImageUrls = successfulUploads.map((img) => img.url);
-
-        if (!value.images) {
-          value.images = existingProduct.images;
-        }
-        value.images = [...value.images, ...newImageUrls];
-      }
+    if (req.files?.additionalImages) {
+      const additionalImagesResult = await uploadMultipleToCloudinary(
+        req.files.additionalImages,
+        "products/additional"
+      );
+      const urls = additionalImagesResult
+        .filter((i) => i.success)
+        .map((i) => i.url);
+      product.images.push(...urls);
     }
 
-    // Update product
-    const updatedProduct = await Product.findByIdAndUpdate(
-      idValue.id,
-      { $set: value },
-      { new: true, runValidators: true }
-    );
+    const updatedProduct = await product.save();
 
     res.status(200).json({
       success: true,
       message: "Product updated successfully",
       data: updatedProduct,
+      updatedFields: Object.keys(validatedData || {}),
     });
-  } catch (error) {
-    console.error("Error updating product:", error);
-
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: "Duplicate field value entered",
-        field: Object.keys(error.keyPattern)[0],
-      });
-    }
-
+  } catch (err) {
+    console.error("Error updating product:", err);
     res.status(500).json({
       success: false,
-      message: "Error updating product",
-      error: error.message,
+      message: "Internal server error",
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
     });
   }
 };
 
-/**
- * Delete product (soft delete)
- */
 export const deleteProduct = async (req, res) => {
   try {
     // Validate product ID
