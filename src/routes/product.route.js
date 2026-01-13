@@ -13,22 +13,12 @@ import { uploadFields } from "../config/multer.js";
 
 const router = express.Router();
 
-const requireMainImage = (req, res, next) => {
-  if (!req.files?.mainImage || !req.files.mainImage[0]) {
-    return res.status(400).json({
-      success: false,
-      message: "Main image is required",
-    });
-  }
-  next();
-};
-
 const productUpload = uploadFields([
   { name: "mainImage", maxCount: 1 },
   { name: "additionalImages", maxCount: 5 },
 ]);
 
-router.post("/", requireMainImage, productUpload, createProduct);
+router.post("/", productUpload, createProduct);
 router.get("/", getProducts);
 router.get("/stats", getProductStats);
 router.get("/best-sellers", getBestSellers);

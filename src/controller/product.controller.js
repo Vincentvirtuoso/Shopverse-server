@@ -190,7 +190,7 @@ export const getProducts = async (req, res) => {
       page = 1,
       limit = 10,
       sort = "newest",
-      category,
+      categories,
       subCategory,
       brand,
       minPrice,
@@ -198,52 +198,77 @@ export const getProducts = async (req, res) => {
       inStock,
       isBestSeller,
       search,
+      minRating,
+      sortBy,
+      sortOrder,
     } = value;
 
-    // Build query
     const query = { isActive: true };
 
-    if (category) query.category = category;
+    if (categories) {
+      const categoryArray = Array.isArray(categories)
+        ? categories
+        : categories.split(",");
+      query.category = { $in: categoryArray };
+    }
+
     if (subCategory) query.subCategory = subCategory;
     if (brand) query.brand = brand;
     if (isBestSeller !== undefined) query.isBestSeller = isBestSeller;
-    if (inStock === true) query.availabilityType = { $ne: "out-of-stock" };
-    if (inStock === false) query.availabilityType = "out-of-stock";
+    if (inStock === true) query.inStock = true;
+    if (inStock === false) query.inStock = false;
 
-    // Price range filter
     if (minPrice !== undefined || maxPrice !== undefined) {
       query.price = {};
       if (minPrice !== undefined) query.price.$gte = minPrice;
       if (maxPrice !== undefined) query.price.$lte = maxPrice;
     }
 
-    // Search filter
+    if (minRating !== undefined) {
+      query.rating = { $gte: minRating };
+    }
+
     if (search) {
-      query.$text = { $search: search };
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { brand: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { tags: { $regex: search, $options: "i" } },
+        { category: { $regex: search, $options: "i" } },
+      ];
     }
 
-    // Sort options
     let sortOption = {};
-    switch (sort) {
-      case "price_asc":
-        sortOption = { price: 1 };
-        break;
-      case "price_desc":
-        sortOption = { price: -1 };
-        break;
-      case "rating":
-        sortOption = { rating: -1, reviewCount: -1 };
-        break;
-      case "name":
-        sortOption = { name: 1 };
-        break;
-      case "newest":
-      default:
-        sortOption = { createdAt: -1 };
-        break;
+
+    if (sortBy) {
+      sortOption[sortBy] = sortOrder === "asc" ? 1 : -1;
+    } else {
+      switch (sort) {
+        case "price_asc":
+          sortOption = { price: 1 };
+          break;
+        case "price_desc":
+          sortOption = { price: -1 };
+          break;
+        case "rating":
+          sortOption = { rating: -1 };
+          break;
+        case "discount":
+          sortOption = { discount: -1 };
+          break;
+        case "name":
+          sortOption = { name: 1 };
+          break;
+        case "featured":
+          sortOption = { isBestSeller: -1, isNewArrival: -1, isFeatured: -1 };
+          break;
+        case "newest":
+        default:
+          sortOption = { createdAt: -1 };
+          break;
+      }
     }
 
-    // Execute query with pagination
     const skip = (page - 1) * limit;
 
     const [products, total] = await Promise.all([
@@ -281,10 +306,6 @@ export const getProducts = async (req, res) => {
     });
   }
 };
-
-/**
- * Get single product by ID
- */
 export const getProductById = async (req, res) => {
   try {
     // Validate product ID

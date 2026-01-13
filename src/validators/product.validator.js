@@ -147,16 +147,23 @@ export const productIdSchema = Joi.object({
 });
 
 export const productQuerySchema = Joi.object({
-  page: Joi.number().min(1).default(1),
-  limit: Joi.number().min(1).max(100).default(10),
-  sort: Joi.string().valid(
-    "newest",
-    "price_asc",
-    "price_desc",
-    "rating",
-    "name"
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(10),
+  sort: Joi.string()
+    .valid(
+      "newest",
+      "price_asc",
+      "price_desc",
+      "rating",
+      "name",
+      "featured",
+      "discount"
+    )
+    .default("newest"),
+  categories: Joi.alternatives().try(
+    Joi.string(),
+    Joi.array().items(Joi.string())
   ),
-  category: Joi.string(),
   subCategory: Joi.string(),
   brand: Joi.string(),
   minPrice: Joi.number().min(0),
@@ -164,4 +171,7 @@ export const productQuerySchema = Joi.object({
   inStock: Joi.boolean(),
   isBestSeller: Joi.boolean(),
   search: Joi.string(),
+  minRating: Joi.number().min(0).max(5),
+  sortBy: Joi.string(),
+  sortOrder: Joi.string().valid("asc", "desc"),
 });
