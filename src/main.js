@@ -20,6 +20,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   "https://shopverse-5bjp.onrender.com",
+  "https://shopverse-admin-r8rq.onrender.com",
 ].filter(Boolean);
 
 const corsOptions = {
