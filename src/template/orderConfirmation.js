@@ -217,6 +217,121 @@ const orderConfirmationEmailTemplate = ({
             .footer-links a:hover {
               text-decoration: underline;
             }
+            .summary-card {
+              background: #ffffff;
+              border: 1px solid #e5e7eb;
+              border-radius: 12px;
+              padding: 24px;
+              box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            }
+
+            /* Summary Item */
+            .summary-item {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              padding: 12px 0;
+            }
+
+            .summary-item:not(:last-child) {
+              border-bottom: 1px solid #f3f4f6;
+            }
+
+            .summary-item.total {
+              border-bottom: none;
+              padding-top: 16px;
+              margin-top: 8px;
+            }
+
+            /* Summary Label */
+            .summary-label {
+              display: flex;
+              flex-direction: column;
+              gap: 4px;
+            }
+
+            .summary-label-desc {
+              font-size: 12px;
+              color: #6b7280;
+              font-weight: 400;
+            }
+
+            /* Summary Value */
+            .summary-value {
+              font-size: 16px;
+              font-weight: 600;
+              color: #374151;
+              text-align: right;
+            }
+
+            .summary-item.total .summary-value {
+              font-size: 24px;
+            }
+
+            /* Divider */
+            .summary-divider {
+              height: 1px;
+              background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+              margin: 16px 0;
+            }
+
+            /* Tax Note */
+            .tax-note {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-top: 16px;
+              padding: 12px;
+              background: #f9fafb;
+              border-radius: 8px;
+              font-size: 13px;
+              color: #6b7280;
+            }
+
+            .tax-note svg {
+              color: #9ca3af;
+              flex-shrink: 0;
+            }
+
+            /* Discount Styling */
+            .summary-item.discount .summary-value {
+              color: #10b981;
+              font-weight: 600;
+            }
+
+            /* Responsive Design */
+            @media (max-width: 640px) {
+              .summary-card {
+                padding: 20px;
+              }
+              
+              .summary-item {
+                padding: 10px 0;
+              }
+              
+              .summary-value {
+                font-size: 15px;
+              }
+              
+              .summary-item.total .summary-value {
+                font-size: 20px;
+              }
+            }
+
+            /* Hover Effects */
+            .summary-item:hover {
+              background: #f9fafb;
+              margin: 0 -12px;
+              padding: 12px;
+              border-radius: 6px;
+              transition: all 0.2s ease;
+            }
+
+            .summary-item.total:hover {
+              background: transparent;
+              margin: 0;
+              padding-top: 16px;
+            }
             @media (max-width: 640px) {
               .container {
                 margin: 0;
@@ -342,46 +457,118 @@ const orderConfirmationEmailTemplate = ({
   
               <!-- Order Total -->
               <div class="section">
-                <h2 class="section-title">Order Total</h2>
-                <div class="summary">
-                  <div class="summary-row">
-                    <span>Subtotal</span>
-                    <span>₦${
-                      order.pricing?.subtotal?.toLocaleString() || "0"
-                    }</span>
+                <h2 class="section-title mb-6">Order Summary</h2>
+                <div class="summary-card">
+                  <!-- Subtotal -->
+                  <div class="summary-item">
+                    <div class="summary-label">
+                      <span>Subtotal</span>
+                      <span class="summary-label-desc">${
+                        order.items?.length || 0
+                      } items</span>
+                    </div>
+                    <div class="summary-value">
+                      ₦${order.pricing?.subtotal?.toLocaleString() || "0"}
+                    </div>
                   </div>
+
+                  <!-- Discount (if any) -->
                   ${
                     order.pricing?.discount?.amount > 0
                       ? `
-                    <div class="summary-row">
-                      <span>Discount</span>
-                      <span style="color: #10B981;">-₦${
-                        order.pricing?.discount?.amount?.toLocaleString() || "0"
-                      }</span>
+                    <div class="summary-item discount">
+                      <div class="summary-label">
+                        <span>Discount</span>
+                        ${
+                          order.pricing?.discount?.code
+                            ? `<span class="summary-label-desc">${order.pricing.discount.code}</span>`
+                            : ""
+                        }
+                      </div>
+                      <div class="summary-value text-green-600">
+                        -₦${
+                          order.pricing?.discount?.amount?.toLocaleString() ||
+                          "0"
+                        }
+                      </div>
                     </div>
-                  `
+                    `
                       : ""
                   }
-                  <div class="summary-row">
-                    <span>Shipping</span>
-                    <span>${
-                      order.pricing?.shipping === 0
-                        ? "FREE"
-                        : `₦${order.pricing?.shipping?.toLocaleString() || "0"}`
-                    }</span>
+
+                  <!-- Shipping -->
+                  <div class="summary-item">
+                    <div class="summary-label">
+                      <span>Shipping</span>
+                      <span class="summary-label-desc">
+                        ${
+                          shippingAddress?.city
+                            ? `${shippingAddress.city}, `
+                            : ""
+                        }
+                        ${shippingAddress?.state || ""}
+                      </span>
+                    </div>
+                    <div class="summary-value">
+                      ${
+                        order.pricing?.shipping === 0
+                          ? '<span class="text-green-600 font-semibold">FREE</span>'
+                          : `₦${
+                              order.pricing?.shipping?.toLocaleString() || "0"
+                            }`
+                      }
+                    </div>
                   </div>
-                  <div class="summary-row">
-                    <span>Tax</span>
-                    <span>₦${
-                      order.pricing?.tax?.total?.toLocaleString() || "0"
-                    }</span>
+
+                  <!-- Tax -->
+                  <div class="summary-item">
+                    <div class="summary-label">
+                      <span>Tax</span>
+                      <span class="summary-label-desc">
+                        ${order.pricing?.tax?.breakdown?.taxRate || "7.5"}%
+                        ${order.pricing?.tax?.breakdown?.taxType || "VAT"}
+                      </span>
+                    </div>
+                    <div class="summary-value">
+                      ₦${order.pricing?.tax?.total?.toLocaleString() || "0"}
+                    </div>
                   </div>
-                  <div class="summary-row total">
-                    <span>Total</span>
-                    <span>₦${
-                      order.pricing?.total?.toLocaleString() || "0"
-                    }</span>
+
+                  <!-- Divider -->
+                  <div class="summary-divider"></div>
+
+                  <!-- Total -->
+                  <div class="summary-item total">
+                    <div class="summary-label">
+                      <span class="text-lg font-bold">Total</span>
+                      <span class="summary-label-desc">
+                        ${order.pricing?.currency || "NGN"}
+                      </span>
+                    </div>
+                    <div class="summary-value">
+                      <span class="text-2xl font-bold text-red-600">
+                        ₦${order.pricing?.total?.toLocaleString() || "0"}
+                      </span>
+                    </div>
                   </div>
+
+                  <!-- Tax Note -->
+                  ${
+                    order.pricing?.tax?.total > 0
+                      ? `
+                    <div class="tax-note">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      <span>
+                        Tax included as per ${
+                          order.pricing?.tax?.breakdown?.location || "NG"
+                        } regulations
+                      </span>
+                    </div>
+                    `
+                      : ""
+                  }
                 </div>
               </div>
   
