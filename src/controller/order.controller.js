@@ -1,10 +1,19 @@
-// controllers/orderController.js
 import mongoose from "mongoose";
-import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import User from "../models/User.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import Order from "../models/Orders.js";
+import {
+  validateDiscountCode,
+  calculateShippingCost,
+  generateUniqueOrderNumber,
+} from "../utils/helpers.js";
+import {
+  sendOrderConfirmationEmail,
+  sendOrderStatusUpdateEmail,
+  sendPaymentConfirmationEmail,
+} from "../utils/emailService.js";
 
 export const createOrder = catchAsync(async (req, res, next) => {
   const {
@@ -20,6 +29,8 @@ export const createOrder = catchAsync(async (req, res, next) => {
 
   const session = await mongoose.startSession();
   session.startTransaction();
+
+  let isTransactionCommitted = false;
 
   try {
     const user = await User.findById(userId).session(session);
@@ -50,7 +61,11 @@ export const createOrder = catchAsync(async (req, res, next) => {
       );
     }
 
-    const validPaymentMethods = ["cash_on_delivery", "card", "bank_transfer"];
+    const validPaymentMethods = [
+      "cash_on_delivery",
+      "paystack",
+      "bank_transfer",
+    ];
     if (!validPaymentMethods.includes(paymentMethod)) {
       await session.abortTransaction();
       return next(
@@ -147,6 +162,7 @@ export const createOrder = catchAsync(async (req, res, next) => {
           amount: itemTax,
         },
         variantId: item.variantId || null,
+        variantName: variantName || null,
       });
 
       subtotal += itemSubtotal;
@@ -182,8 +198,17 @@ export const createOrder = catchAsync(async (req, res, next) => {
       return next(new AppError("Invalid order total", 400, "INVALID_TOTAL"));
     }
 
+    // Generate unique order number
+    const orderNumber = await generateUniqueOrderNumber(async (orderNum) => {
+      const existing = await Order.findOne({ orderNumber: orderNum }).session(
+        session
+      );
+      return !!existing;
+    }, 5);
+
     // Create order object
     const orderData = {
+      orderNumber,
       customer: {
         user: userId,
         email: user.email,
@@ -207,6 +232,9 @@ export const createOrder = catchAsync(async (req, res, next) => {
       payment: {
         method: paymentMethod,
         status: "pending",
+        ...(paymentMethod === "paystack" && {
+          transactionId: `PSK-${Date.now()}`,
+        }),
       },
       pricing: {
         subtotal,
@@ -281,8 +309,52 @@ export const createOrder = catchAsync(async (req, res, next) => {
 
     // Commit the transaction
     await session.commitTransaction();
+    isTransactionCommitted = true;
 
-    // Send order confirmation email asynchronously (don't await)
+    // ========== POST-TRANSACTION OPERATIONS ==========
+    // Everything below happens AFTER the transaction is committed
+    // Errors here should NOT abort the transaction
+
+    // Prepare order response for frontend
+    const orderResponse = {
+      id: order._id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      total: order.pricing.total,
+      currency: order.pricing.currency,
+      items: order.items.map((item) => ({
+        productId: item.product,
+        quantity: item.quantity,
+        variantId: item.variantId,
+      })),
+      createdAt: order.createdAt,
+      estimatedDelivery: calculateEstimatedDelivery(),
+      payment: {
+        method: order.payment.method,
+        status: order.payment.status,
+        ...(order.payment.transactionId && {
+          transactionId: order.payment.transactionId,
+        }),
+      },
+    };
+
+    // For Paystack, generate payment link
+    let paymentData = null;
+    if (paymentMethod === "paystack") {
+      try {
+        paymentData = await generatePaystackPayment(order);
+        orderResponse.payment.paystack = {
+          authorization_url: paymentData.authorization_url,
+          reference: paymentData.reference,
+          access_code: paymentData.access_code,
+        };
+      } catch (paymentError) {
+        console.error("Failed to generate Paystack payment:", paymentError);
+        // Order is already created, so we continue without payment link
+        // Frontend can retry payment generation
+      }
+    }
+
     sendOrderConfirmationEmail(user.email, order, user.firstName).catch(
       (err) => {
         console.error("Failed to send order confirmation email:", err);
@@ -294,83 +366,89 @@ export const createOrder = catchAsync(async (req, res, next) => {
       status: "success",
       message: "Order created successfully",
       data: {
-        order: {
-          id: order._id,
-          orderNumber: order.orderNumber,
-          status: order.status,
-          total: order.pricing.total,
-          currency: order.pricing.currency,
-          items: order.items.length,
-          createdAt: order.createdAt,
-        },
+        order: orderResponse,
+        ...(paymentData && { payment: paymentData }),
       },
     });
   } catch (error) {
-    // Rollback transaction on error
-    await session.abortTransaction();
-    throw error;
+    // Only abort transaction if it hasn't been committed yet
+    if (!isTransactionCommitted) {
+      await session.abortTransaction();
+    }
+
+    console.error("Order creation error:", error);
+
+    // Handle specific errors
+    if (error.name === "ValidationError") {
+      return next(new AppError(error.message, 400, "VALIDATION_ERROR"));
+    }
+
+    if (error.code === 11000) {
+      return next(
+        new AppError(
+          "Order number conflict, please try again",
+          409,
+          "DUPLICATE_ORDER_NUMBER"
+        )
+      );
+    }
+
+    return next(
+      new AppError(
+        "Failed to create order. Please try again.",
+        500,
+        "ORDER_CREATION_FAILED"
+      )
+    );
   } finally {
-    // End session
     session.endSession();
   }
 });
 
-// Helper function for shipping cost calculation
-function calculateShippingCost(shippingAddress, orderItems) {
-  // Implement your shipping logic here
-  // Example: flat rate or weight-based calculation
-  const baseShippingCost = 1000; // Base cost in NGN
+const calculateEstimatedDelivery = () => {
+  const today = new Date();
+  const deliveryDate = new Date(today);
 
-  // Calculate based on quantity (simple example)
-  const totalQuantity = orderItems.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  );
-  const additionalCost = Math.max(0, (totalQuantity - 1) * 200);
-
-  return baseShippingCost + additionalCost;
-}
-
-// Helper function for discount validation
-async function validateDiscountCode(code, subtotal, userId, session) {
-  // Implement your discount validation logic
-  // Example structure:
-  const discount = await Discount.findOne({
-    code: code.toUpperCase(),
-    isActive: true,
-    validFrom: { $lte: new Date() },
-    validUntil: { $gte: new Date() },
-  }).session(session);
-
-  if (!discount) {
-    return { valid: false, amount: 0 };
-  }
-
-  // Check minimum purchase amount
-  if (discount.minimumPurchase && subtotal < discount.minimumPurchase) {
-    return { valid: false, amount: 0 };
-  }
-
-  // Calculate discount amount
-  let amount = 0;
-  if (discount.type === "percentage") {
-    amount = (subtotal * discount.value) / 100;
-    if (discount.maxDiscount) {
-      amount = Math.min(amount, discount.maxDiscount);
+  // Add 3-7 business days
+  let businessDaysAdded = 0;
+  while (businessDaysAdded < 3) {
+    deliveryDate.setDate(deliveryDate.getDate() + 1);
+    const dayOfWeek = deliveryDate.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      businessDaysAdded++;
     }
-  } else if (discount.type === "fixed") {
-    amount = discount.value;
   }
 
-  return {
-    valid: true,
-    amount,
-    details: {
-      type: discount.type,
-      value: discount.value,
-    },
-  };
-}
+  return deliveryDate;
+};
+
+// Helper function to generate Paystack payment
+const generatePaystackPayment = async (order) => {
+  try {
+    const Paystack = require("paystack")(process.env.PAYSTACK_SECRET_KEY);
+
+    const response = await Paystack.transaction.initialize({
+      email: order.customer.email,
+      amount: order.pricing.total * 100, // Convert to kobo
+      reference: order.payment.transactionId,
+      metadata: {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        customerId: order.customer.user.toString(),
+      },
+      callback_url: `${process.env.FRONTEND_URL}/order-success?reference=${order.payment.transactionId}`,
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error("Paystack payment generation failed:", error);
+    throw new AppError(
+      "Payment gateway error. Please try again.",
+      500,
+      "PAYMENT_GATEWAY_ERROR"
+    );
+  }
+};
 
 export const getOrder = catchAsync(async (req, res, next) => {
   const { id } = req.params;
@@ -457,9 +535,6 @@ export const getMyOrders = catchAsync(async (req, res, next) => {
   });
 });
 
-// @desc    Update order status (Admin/Seller)
-// @route   PATCH /api/orders/:id/status
-// @access  Private/Admin
 export const updateOrderStatus = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const { status, note } = req.body;
@@ -513,7 +588,11 @@ export const updateOrderStatus = catchAsync(async (req, res, next) => {
   await order.save();
 
   // Send status update notification
-  // await sendStatusUpdateEmail(order.customer.email, order, order.customer.firstName);
+  await sendOrderStatusUpdateEmail(
+    order.customer.email,
+    order,
+    order.customer.firstName
+  );
 
   res.status(200).json({
     status: "success",
@@ -886,32 +965,6 @@ export const getSalesStats = catchAsync(async (req, res, next) => {
   });
 });
 
-// Helper function to calculate shipping cost
-function calculateShippingCost(address, items) {
-  // Implement your shipping logic here
-  // This is a simplified example
-  const baseShipping = 1500; // NGN
-  const perItemShipping = 200; // NGN
-
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-
-  // Adjust based on location (simplified)
-  let locationMultiplier = 1;
-  if (address.state.toLowerCase().includes("lagos")) {
-    locationMultiplier = 0.8;
-  } else if (
-    ["abuja", "port harcourt", "ibadan"].includes(address.city.toLowerCase())
-  ) {
-    locationMultiplier = 1.2;
-  } else {
-    locationMultiplier = 1.5;
-  }
-
-  return Math.round(
-    (baseShipping + perItemShipping * totalItems) * locationMultiplier
-  );
-}
-
 // Helper function to validate status transitions
 function getValidStatusTransitions(currentStatus, userRole) {
   const transitions = {
@@ -1014,7 +1067,7 @@ export const processPaystackWebhook = catchAsync(async (req, res, next) => {
     await order.save();
 
     // Send payment confirmation email
-    // await sendPaymentConfirmationEmail(order);
+    await sendPaymentConfirmationEmail(order);
   }
 
   res.status(200).json({ status: "success" });

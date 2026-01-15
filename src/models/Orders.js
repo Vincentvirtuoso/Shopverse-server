@@ -1,4 +1,8 @@
-import mongoose from "mongoose";
+import mongoose, { Schema } from "mongoose";
+import {
+  generateOrderNumber,
+  generateUniqueOrderNumber,
+} from "../utils/helpers.js";
 
 const OrderSchema = new mongoose.Schema(
   {
@@ -414,23 +418,29 @@ OrderSchema.statics.getRevenueForPeriod = async function (startDate, endDate) {
   ]);
 };
 
-OrderSchema.pre("save", function (next) {
+OrderSchema.pre("save", async function (next) {
   if (!this.orderNumber) {
-    const date = new Date();
-    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, "");
-    const randomNum = Math.floor(Math.random() * 100000)
-      .toString()
-      .padStart(5, "0");
-    this.orderNumber = `ORD-${dateStr}-${randomNum}`;
+    try {
+      const checkExists = async (orderNum) => {
+        const existing = await mongoose
+          .model("Order")
+          .findOne({ orderNumber: orderNum });
+        return !!existing;
+      };
+
+      this.orderNumber = await generateUniqueOrderNumber(checkExists);
+    } catch (error) {
+      this.orderNumber = generateOrderNumber();
+    }
   }
-  next();
+  // next();
 });
 
 OrderSchema.pre("save", function (next) {
   if (this.isModified("items") || this.isModified("pricing")) {
     this.calculateTotals();
   }
-  next();
+  // next();
 });
 
 OrderSchema.post("save", async function (doc) {

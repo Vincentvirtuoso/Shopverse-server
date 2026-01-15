@@ -9,6 +9,7 @@ import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import productRoutes from "./routes/product.route.js";
 import setupRoutes from "./routes/setupRoutes.js";
+import orderRoutes from "./routes/order.routes.js";
 
 dotenv.config();
 connectDB();
@@ -76,6 +77,7 @@ app.use(
 );
 
 app.use("/api/products", productRoutes);
+app.use("/api/orders", orderRoutes);
 app.use("/api/setup", setupRoutes);
 
 app.get("/", (req, res) => {
