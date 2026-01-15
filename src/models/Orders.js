@@ -426,7 +426,6 @@ OrderSchema.pre("save", function (next) {
   next();
 });
 
-// Pre-save: Calculate totals
 OrderSchema.pre("save", function (next) {
   if (this.isModified("items") || this.isModified("pricing")) {
     this.calculateTotals();
@@ -434,7 +433,6 @@ OrderSchema.pre("save", function (next) {
   next();
 });
 
-// Post-save: Send confirmation email
 OrderSchema.post("save", async function (doc) {
   if (doc.isNew && doc.payment.status === "paid") {
     console.log(`Send order confirmation email for order: ${doc.orderNumber}`);
@@ -443,4 +441,4 @@ OrderSchema.post("save", async function (doc) {
 
 const Order = mongoose.model("Order", OrderSchema);
 
-module.exports = Order;
+export default Order;
