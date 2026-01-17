@@ -147,7 +147,6 @@ export const createOrder = catchAsync(async (req, res, next) => {
         );
       }
 
-      // Calculate tax (7.5% VAT for Nigeria - adjust as needed)
       const itemSubtotal = finalPrice * item.quantity;
       const itemTax = itemSubtotal * 0.045;
 
