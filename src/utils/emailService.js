@@ -598,6 +598,7 @@ export const sendOrderConfirmationEmail = async (
       currentYear,
       firstName,
       orderUrl,
+      shippingAddress,
       trackingUrl,
     }),
     textContent: orderConfirmationTextContent({

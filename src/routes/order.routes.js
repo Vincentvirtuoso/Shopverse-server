@@ -9,14 +9,14 @@ import {
   getInvoice,
   getAllOrders,
   getSalesStats,
-  processPaystackWebhook,
+  // processPaystackWebhook,
   confirmCashOnDelivery,
 } from "../controller/order.controller.js";
-import { authorize, protect } from "../middleware/auth.middleware.js";
+import { protect, restrictTo } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.route("/webhook/paystack").post(processPaystackWebhook);
+// router.route("/webhook/paystack").post(processPaystackWebhook);
 
 // Protected routes (require authentication)
 router.use(protect);
@@ -29,13 +29,13 @@ router.route("/:id/returns").post(requestReturn);
 router.route("/:id/invoice").get(getInvoice);
 
 // Admin/Seller routes
-router.route("/").get(authorize("admin", "seller"), getAllOrders);
-router.route("/stats/sales").get(authorize("admin"), getSalesStats);
+router.route("/").get(restrictTo("admin", "seller"), getAllOrders);
+router.route("/stats/sales").get(restrictTo("admin"), getSalesStats);
 router
   .route("/:id/status")
-  .patch(authorize("admin", "seller"), updateOrderStatus);
+  .patch(restrictTo("admin", "seller"), updateOrderStatus);
 router
   .route("/:id/confirm-cod")
-  .post(authorize("admin", "seller"), confirmCashOnDelivery);
+  .post(restrictTo("admin", "seller"), confirmCashOnDelivery);
 
 export default router;

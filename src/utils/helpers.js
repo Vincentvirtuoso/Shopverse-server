@@ -115,3 +115,54 @@ export const validateDiscountCode = async (code, subtotal, userId, session) => {
     } off`,
   };
 };
+
+export function getValidStatusTransitions(currentStatus, userRole) {
+  const transitions = {
+    admin: {
+      pending: ["payment_pending", "cancelled"],
+      payment_pending: ["paid", "cancelled"],
+      paid: ["processing", "cancelled"],
+      processing: ["ready_to_ship", "on_hold", "cancelled"],
+      ready_to_ship: ["shipped", "cancelled"],
+      shipped: ["out_for_delivery", "delivered"],
+      out_for_delivery: ["delivered"],
+      delivered: ["completed"],
+      on_hold: ["processing", "cancelled"],
+      cancelled: [],
+      completed: [],
+      refunded: [],
+      failed: [],
+    },
+    seller: {
+      pending: ["payment_pending", "cancelled"],
+      payment_pending: ["paid", "cancelled"],
+      paid: ["processing", "cancelled"],
+      processing: ["ready_to_ship", "on_hold", "cancelled"],
+      ready_to_ship: ["shipped", "cancelled"],
+      shipped: ["out_for_delivery", "delivered"],
+      out_for_delivery: ["delivered"],
+      delivered: ["completed"],
+      on_hold: ["processing", "cancelled"],
+      cancelled: [],
+      completed: [],
+      refunded: [],
+      failed: [],
+    },
+    customer: {
+      pending: ["cancelled"],
+      payment_pending: ["cancelled"],
+      paid: ["cancelled"],
+      processing: ["cancelled"],
+      ready_to_ship: [],
+      shipped: [],
+      out_for_delivery: [],
+      delivered: [],
+      cancelled: [],
+      completed: [],
+      refunded: [],
+      failed: [],
+    },
+  };
+
+  return transitions[userRole]?.[currentStatus] || [];
+}

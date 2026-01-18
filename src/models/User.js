@@ -129,6 +129,25 @@ const userSchema = new mongoose.Schema(
 
     emailVerificationToken: String,
     emailVerificationExpires: Date,
+    refreshTokens: {
+      type: [
+        {
+          tokenHash: {
+            type: String,
+            required: true,
+          },
+          createdAt: {
+            type: Date,
+            default: Date.now,
+          },
+          expiresAt: {
+            type: Date,
+            required: true,
+          },
+        },
+      ],
+      default: [],
+    },
   },
   {
     timestamps: true,

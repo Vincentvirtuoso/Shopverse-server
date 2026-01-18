@@ -7,8 +7,15 @@ import {
   sendWelcomeEmail,
 } from "../utils/emailService.js";
 import crypto from "crypto";
+import AuditLog from "../models/AuditLog.js";
+import {
+  hashToken,
+  signAccessToken,
+  signRefreshToken,
+} from "../utils/auth.token.js";
+import { AUTH_CONFIG } from "../config/auth.config.js";
+import { cookieOptions } from "../utils/auth.cookies.js";
 
-// Cookie settings
 const secure = process.env.NODE_ENV === "production";
 
 const createCookieOptions = (days) => {
@@ -18,10 +25,6 @@ const createCookieOptions = (days) => {
     secure,
     sameSite: secure ? "none" : "lax",
   };
-
-  if (secure && process.env.COOKIE_DOMAIN) {
-    options.domain = process.env.COOKIE_DOMAIN;
-  }
 
   return options;
 };
@@ -59,34 +62,43 @@ export const login = catchAsync(async (req, res, next) => {
     return next(new AppError("Email not verified", 403, "EMAIL_NOT_VERIFIED"));
   }
 
-  // Generate tokens
-  const token = jwt.sign(
-    {
-      id: user._id,
-      email: user.email,
-      role: user.role,
-      isSeller: user.isSeller,
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
-  );
+  const roleKey =
+    user.role === "admin" || user.role === "super_admin" ? user.role : "user";
 
-  const refreshToken = jwt.sign(
-    { id: user._id },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: "30d" }
+  const roleConfig = AUTH_CONFIG.roles[roleKey];
+
+  const accessToken = signAccessToken(user, roleConfig);
+  const refreshToken = signRefreshToken(user, roleConfig);
+
+  const refreshTokenHash = hashToken(refreshToken);
+  user.refreshTokens = user.refreshTokens || [];
+
+  user.refreshTokens.push({
+    tokenHash: refreshTokenHash,
+    createdAt: new Date(),
+    expiresAt: new Date(
+      Date.now() + AUTH_CONFIG.refresh.expiresInDays * 86400000
+    ),
+  });
+
+  await user.save({ validateBeforeSave: false });
+
+  res.cookie(roleConfig.tokenName, accessToken, cookieOptions(7));
+  res.cookie(
+    roleConfig.refreshTokenName,
+    refreshToken,
+    cookieOptions(AUTH_CONFIG.refresh.expiresInDays)
   );
 
   // Update stats
-  user.stats.lastLogin = new Date();
-  user.stats.loginCount += 1;
-  await user.save({ validateBeforeSave: false });
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: { "stats.lastLogin": new Date() },
+      $inc: { "stats.loginCount": 1 },
+    }
+  );
 
-  // Set cookies
-  res.cookie("token", token, createCookieOptions(7));
-  res.cookie("refreshToken", refreshToken, createCookieOptions(30));
-
-  // Build response data
   const userData = {
     id: user._id,
     email: user.email,
@@ -112,30 +124,143 @@ export const login = catchAsync(async (req, res, next) => {
     message: "Login successful",
     data: {
       user: userData,
-      token,
-      refreshToken,
-      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
     },
   });
 });
 
 export const logout = catchAsync(async (req, res) => {
-  const cookieOptions = {
-    httpOnly: true,
-    secure,
-    sameSite: secure ? "none" : "lax",
-  };
+  const cookies = req.cookies || {};
+  const refreshToken =
+    cookies.admin_refresh_token || cookies.user_refresh_token;
 
-  if (secure && process.env.COOKIE_DOMAIN) {
-    cookieOptions.domain = process.env.COOKIE_DOMAIN;
+  if (refreshToken) {
+    const decoded = jwt.decode(refreshToken);
+    if (decoded?.id) {
+      await User.updateOne(
+        { _id: decoded.id },
+        { $set: { refreshTokens: [] } }
+      );
+    }
   }
 
-  res.clearCookie("token", cookieOptions);
-  res.clearCookie("refreshToken", cookieOptions);
+  Object.values(AUTH_CONFIG.roles).forEach((r) => {
+    res.clearCookie(r.tokenName);
+    res.clearCookie(r.refreshTokenName);
+  });
 
   res.status(200).json({
     success: true,
     message: "Logged out successfully",
+  });
+});
+
+export const forceLogoutUser = catchAsync(async (req, res) => {
+  const { userId } = req.params;
+
+  // Check if requester has permission
+  if (req.user.role !== "super_admin" && req.user.role !== "admin") {
+    return next(new AppError("Unauthorized to force logout", 403, "FORBIDDEN"));
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    return next(new AppError("User not found", 404, "USER_NOT_FOUND"));
+  }
+
+  // Add to invalidated tokens list
+  await User.findByIdAndUpdate(userId, {
+    $push: {
+      "security.invalidatedTokens": {
+        timestamp: new Date(),
+        reason: "force_logout",
+        initiatedBy: req.user.id,
+      },
+    },
+    $set: {
+      "security.lastForceLogout": new Date(),
+    },
+  });
+
+  // Create audit log
+  await AuditLog.create({
+    userId: req.user.id,
+    action: "FORCE_LOGOUT",
+    targetUserId: userId,
+    ipAddress: req.ip,
+    userAgent: req.headers["user-agent"],
+    details: {
+      reason: req.body.reason || "Administrative action",
+    },
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "User logged out from all sessions",
+    data: {
+      userId,
+      timestamp: new Date().toISOString(),
+      initiatedBy: req.user.id,
+    },
+  });
+});
+
+// Logout from all devices (user-initiated)
+export const logoutAllDevices = catchAsync(async (req, res, next) => {
+  if (!req.user) {
+    return next(new AppError("Authentication required", 401, "UNAUTHORIZED"));
+  }
+
+  // Clear current session cookies first
+  const secure = process.env.NODE_ENV === "production";
+  const cookieOptions = {
+    httpOnly: true,
+    secure,
+    sameSite: secure ? "none" : "lax",
+    path: "/",
+  };
+
+  const cookiesToClear = [
+    process.env.ADMIN_TOKEN_NAME || "admin_token",
+    process.env.ADMIN_REFRESH_TOKEN_NAME || "admin_refresh_token",
+    process.env.USER_TOKEN_NAME || "user_token",
+    process.env.USER_REFRESH_TOKEN_NAME || "user_refresh_token",
+    "token",
+    "refreshToken",
+  ];
+
+  cookiesToClear.forEach((cookieName) => {
+    res.clearCookie(cookieName, cookieOptions);
+  });
+
+  // Invalidate all tokens for this user
+  await User.findByIdAndUpdate(req.user.id, {
+    $push: {
+      "security.invalidatedTokens": {
+        timestamp: new Date(),
+        reason: "logout_all_devices",
+        allDevices: true,
+      },
+    },
+    $set: {
+      "security.tokenVersion": (req.user.security?.tokenVersion || 0) + 1,
+      "security.lastLogoutAll": new Date(),
+    },
+  });
+
+  // Create audit log
+  await AuditLog.create({
+    userId: req.user.id,
+    action: "LOGOUT_ALL_DEVICES",
+    ipAddress: req.ip,
+    userAgent: req.headers["user-agent"],
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Logged out from all devices successfully",
+    data: {
+      timestamp: new Date().toISOString(),
+    },
   });
 });
 
@@ -319,40 +444,71 @@ export const resendVerificationEmail = catchAsync(async (req, res, next) => {
 });
 
 export const refreshToken = catchAsync(async (req, res, next) => {
-  // Check both cookies and body for refresh token
-  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  const cookies = req.cookies || {};
+
+  const refreshToken =
+    cookies.admin_refresh_token || cookies.user_refresh_token;
 
   if (!refreshToken) {
-    return next(new AppError("Refresh token required", 401, "TOKEN_REQUIRED"));
+    return next(new AppError("Refresh token required", 401));
   }
 
-  try {
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+  let decoded;
 
-    const user = await User.findById(decoded.id);
+  try {
+    decoded = jwt.decode(refreshToken);
+  } catch {
+    return next(new AppError("Invalid refresh token", 401));
+  }
+
+  const roleConfig = AUTH_CONFIG.roles[decoded.role || "user"];
+
+  try {
+    jwt.verify(refreshToken, roleConfig.refreshSecret);
+  } catch {
+    return next(new AppError("Refresh token expired", 401));
+  }
+
+  const tokenHash = hashToken(refreshToken);
+
+  try {
+    const user = await User.findOne({
+      _id: decoded.id,
+      "refreshTokens.tokenHash": tokenHash,
+    });
 
     if (!user) {
-      return next(new AppError("User not found", 404, "USER_NOT_FOUND"));
+      // token reuse detected → revoke ALL
+      await User.updateOne(
+        { _id: decoded.id },
+        { $set: { refreshTokens: [] } }
+      );
+      return next(new AppError("Session compromised. Login again.", 401));
     }
 
-    if (!user.isActive) {
-      return next(new AppError("Account is deactivated", 403, "FORBIDDEN"));
-    }
-
-    // Generate new access token
-    const newToken = jwt.sign(
-      {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        isSeller: user.isSeller,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+    user.refreshTokens = user.refreshTokens.filter(
+      (t) => t.tokenHash !== tokenHash
     );
 
-    // Set new token in cookie
-    res.cookie("token", newToken, createCookieOptions(7));
+    const newAccessToken = signAccessToken(user, roleConfig);
+    const newRefreshToken = signRefreshToken(user, roleConfig);
+
+    user.refreshTokens.push({
+      tokenHash: hashToken(newRefreshToken),
+      createdAt: new Date(),
+      expiresAt: new Date(
+        Date.now() + AUTH_CONFIG.refresh.expiresInDays * 86400000
+      ),
+    });
+
+    await user.save({ validateBeforeSave: false });
+
+    res.cookie(roleConfig.tokenName, newAccessToken, cookieOptions(7));
+    res.cookie(
+      roleConfig.refreshTokenName,
+      newRefreshToken,
+      cookieOptions(AUTH_CONFIG.refresh.expiresInDays)
+    );
 
     // Build user data
     const userData = {
@@ -372,6 +528,8 @@ export const refreshToken = catchAsync(async (req, res, next) => {
       stats: user.stats,
       addresses: user.addresses,
       sellerProfile: user.role === "seller" ? user.sellerProfile : undefined,
+      isSuperAdmin: user.role === "super_admin",
+      isAdmin: user.role === "admin" || user.role === "super_admin",
     };
 
     res.status(200).json({
@@ -379,12 +537,18 @@ export const refreshToken = catchAsync(async (req, res, next) => {
       message: "Token refreshed successfully",
       data: {
         user: userData,
-        token: newToken,
-        expiresIn: process.env.JWT_EXPIRES_IN || "7d",
       },
     });
   } catch (error) {
-    return next(new AppError("Invalid refresh token", 401, "INVALID_TOKEN"));
+    if (error.name === "JsonWebTokenError") {
+      return next(new AppError("Invalid refresh token", 401, "INVALID_TOKEN"));
+    }
+    if (error.name === "TokenExpiredError") {
+      return next(
+        new AppError("Refresh token expired", 401, "REFRESH_TOKEN_EXPIRED")
+      );
+    }
+    return next(new AppError("Token refresh failed", 401, "REFRESH_FAILED"));
   }
 });
 

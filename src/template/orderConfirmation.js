@@ -4,6 +4,7 @@ const orderConfirmationEmailTemplate = ({
   currentYear,
   firstName,
   orderUrl,
+  shippingAddress,
   trackingUrl,
 }) => {
   return `

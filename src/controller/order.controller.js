@@ -473,9 +473,6 @@ export const getOrder = catchAsync(async (req, res, next) => {
   });
 });
 
-// @desc    Get all orders for logged in user
-// @route   GET /api/orders/my-orders
-// @access  Private
 export const getMyOrders = catchAsync(async (req, res, next) => {
   const userId = req.user._id;
   const {
@@ -602,9 +599,6 @@ export const updateOrderStatus = catchAsync(async (req, res, next) => {
   });
 });
 
-// @desc    Cancel order
-// @route   PATCH /api/orders/:id/cancel
-// @access  Private
 export const cancelOrder = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user._id;
@@ -667,9 +661,6 @@ export const cancelOrder = catchAsync(async (req, res, next) => {
   });
 });
 
-// @desc    Request return
-// @route   POST /api/orders/:id/returns
-// @access  Private
 export const requestReturn = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user._id;
@@ -737,9 +728,6 @@ export const requestReturn = catchAsync(async (req, res, next) => {
   });
 });
 
-// @desc    Get order invoice
-// @route   GET /api/orders/:id/invoice
-// @access  Private
 export const getInvoice = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user._id;
@@ -764,9 +752,6 @@ export const getInvoice = catchAsync(async (req, res, next) => {
   });
 });
 
-// @desc    Get all orders (Admin)
-// @route   GET /api/orders
-// @access  Private/Admin
 export const getAllOrders = catchAsync(async (req, res, next) => {
   if (!["admin", "super_admin"].includes(req.user.role)) {
     return next(new AppError("Not authorized", 403, "FORBIDDEN"));
@@ -857,9 +842,6 @@ export const getAllOrders = catchAsync(async (req, res, next) => {
   });
 });
 
-// @desc    Get sales statistics (Admin)
-// @route   GET /api/orders/stats/sales
-// @access  Private/Admin
 export const getSalesStats = catchAsync(async (req, res, next) => {
   if (!["admin", "super_admin"].includes(req.user.role)) {
     return next(new AppError("Not authorized", 403, "FORBIDDEN"));
@@ -964,117 +946,6 @@ export const getSalesStats = catchAsync(async (req, res, next) => {
   });
 });
 
-// Helper function to validate status transitions
-function getValidStatusTransitions(currentStatus, userRole) {
-  const transitions = {
-    admin: {
-      pending: ["payment_pending", "cancelled"],
-      payment_pending: ["paid", "cancelled"],
-      paid: ["processing", "cancelled"],
-      processing: ["ready_to_ship", "on_hold", "cancelled"],
-      ready_to_ship: ["shipped", "cancelled"],
-      shipped: ["out_for_delivery", "delivered"],
-      out_for_delivery: ["delivered"],
-      delivered: ["completed"],
-      on_hold: ["processing", "cancelled"],
-      cancelled: [],
-      completed: [],
-      refunded: [],
-      failed: [],
-    },
-    seller: {
-      pending: ["payment_pending", "cancelled"],
-      payment_pending: ["paid", "cancelled"],
-      paid: ["processing", "cancelled"],
-      processing: ["ready_to_ship", "on_hold", "cancelled"],
-      ready_to_ship: ["shipped", "cancelled"],
-      shipped: ["out_for_delivery", "delivered"],
-      out_for_delivery: ["delivered"],
-      delivered: ["completed"],
-      on_hold: ["processing", "cancelled"],
-      cancelled: [],
-      completed: [],
-      refunded: [],
-      failed: [],
-    },
-    customer: {
-      pending: ["cancelled"],
-      payment_pending: ["cancelled"],
-      paid: ["cancelled"],
-      processing: ["cancelled"],
-      ready_to_ship: [],
-      shipped: [],
-      out_for_delivery: [],
-      delivered: [],
-      cancelled: [],
-      completed: [],
-      refunded: [],
-      failed: [],
-    },
-  };
-
-  return transitions[userRole]?.[currentStatus] || [];
-}
-
-// @desc    Process payment webhook (Paystack)
-// @route   POST /api/orders/webhook/paystack
-// @access  Public (secured with webhook secret)
-export const processPaystackWebhook = catchAsync(async (req, res, next) => {
-  const signature = req.headers["x-paystack-signature"];
-  const rawBody = JSON.stringify(req.body);
-
-  // Verify webhook signature
-  const crypto = await import("crypto");
-  const hash = crypto
-    .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
-    .update(rawBody)
-    .digest("hex");
-
-  if (hash !== signature) {
-    return next(
-      new AppError("Invalid signature", 401, "INVALID_WEBHOOK_SIGNATURE")
-    );
-  }
-
-  const { event, data } = req.body;
-
-  if (event === "charge.success") {
-    const { reference, metadata } = data;
-
-    // Find order by transaction reference
-    const order = await Order.findOne({
-      "payment.transactionId": reference,
-    });
-
-    if (!order) {
-      return res.status(200).json({ status: "success" }); // Acknowledge webhook anyway
-    }
-
-    // Update payment status
-    order.payment.status = "paid";
-    order.payment.paidAt = new Date();
-    order.status = "processing";
-
-    // Add to status history
-    order.statusHistory.push({
-      status: "paid",
-      timestamp: new Date(),
-      note: "Payment confirmed via Paystack",
-      updatedBy: metadata?.userId || null,
-    });
-
-    await order.save();
-
-    // Send payment confirmation email
-    await sendPaymentConfirmationEmail(order);
-  }
-
-  res.status(200).json({ status: "success" });
-});
-
-// @desc    Process COD confirmation
-// @route   POST /api/orders/:id/confirm-cod
-// @access  Private/Admin/Seller
 export const confirmCashOnDelivery = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const { amountReceived, notes } = req.body;
