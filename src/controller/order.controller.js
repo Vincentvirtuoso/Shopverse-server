@@ -12,17 +12,17 @@ import {
 import {
   sendOrderConfirmationEmail,
   sendOrderStatusUpdateEmail,
-  sendPaymentConfirmationEmail,
 } from "../utils/emailService.js";
+import { generatePaystackPayment } from "../utils/paystack.js";
 
 export const createOrder = catchAsync(async (req, res, next) => {
   const {
     items,
     shippingAddress,
-    paymentMethod,
     discountCode,
     notes,
     billingAddress,
+    paymentMethod,
   } = req.body;
 
   const userId = req.user._id;
@@ -61,11 +61,7 @@ export const createOrder = catchAsync(async (req, res, next) => {
       );
     }
 
-    const validPaymentMethods = [
-      "cash_on_delivery",
-      "paystack",
-      "bank_transfer",
-    ];
+    const validPaymentMethods = ["cash_on_delivery", "paystack"];
     if (!validPaymentMethods.includes(paymentMethod)) {
       await session.abortTransaction();
       return next(
@@ -231,9 +227,8 @@ export const createOrder = catchAsync(async (req, res, next) => {
       payment: {
         method: paymentMethod,
         status: "pending",
-        ...(paymentMethod === "paystack" && {
-          transactionId: `PSK-${Date.now()}`,
-        }),
+        transactionId:
+          paymentMethod === "paystack" ? `${orderNumber}-${Date.now()}` : null,
       },
       pricing: {
         subtotal,
@@ -349,8 +344,6 @@ export const createOrder = catchAsync(async (req, res, next) => {
         };
       } catch (paymentError) {
         console.error("Failed to generate Paystack payment:", paymentError);
-        // Order is already created, so we continue without payment link
-        // Frontend can retry payment generation
       }
     }
 
@@ -422,32 +415,32 @@ const calculateEstimatedDelivery = () => {
 };
 
 // Helper function to generate Paystack payment
-const generatePaystackPayment = async (order) => {
-  try {
-    const Paystack = require("paystack")(process.env.PAYSTACK_SECRET_KEY);
+// const generatePaystackPayment = async (order) => {
+//   try {
+//     const Paystack = require("paystack")(process.env.PAYSTACK_SECRET_KEY);
 
-    const response = await Paystack.transaction.initialize({
-      email: order.customer.email,
-      amount: order.pricing.total * 100, // Convert to kobo
-      reference: order.payment.transactionId,
-      metadata: {
-        orderId: order._id.toString(),
-        orderNumber: order.orderNumber,
-        customerId: order.customer.user.toString(),
-      },
-      callback_url: `${process.env.FRONTEND_URL}/order-success?reference=${order.payment.transactionId}`,
-    });
+//     const response = await Paystack.transaction.initialize({
+//       email: order.customer.email,
+//       amount: order.pricing.total * 100, // Convert to kobo
+//       reference: order.payment.transactionId,
+//       metadata: {
+//         orderId: order._id.toString(),
+//         orderNumber: order.orderNumber,
+//         customerId: order.customer.user.toString(),
+//       },
+//       callback_url: `${process.env.FRONTEND_URL}/order-success?reference=${order.payment.transactionId}`,
+//     });
 
-    return response.data;
-  } catch (error) {
-    console.error("Paystack payment generation failed:", error);
-    throw new AppError(
-      "Payment gateway error. Please try again.",
-      500,
-      "PAYMENT_GATEWAY_ERROR"
-    );
-  }
-};
+//     return response.data;
+//   } catch (error) {
+//     console.error("Paystack payment generation failed:", error);
+//     throw new AppError(
+//       "Payment gateway error. Please try again.",
+//       500,
+//       "PAYMENT_GATEWAY_ERROR"
+//     );
+//   }
+// };
 
 export const getOrder = catchAsync(async (req, res, next) => {
   const { id } = req.params;

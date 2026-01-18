@@ -10,6 +10,7 @@ import rateLimit from "express-rate-limit";
 import productRoutes from "./routes/product.route.js";
 import setupRoutes from "./routes/setupRoutes.js";
 import orderRoutes from "./routes/order.routes.js";
+import paymentRoutes from "./routes/payment.routes.js";
 
 dotenv.config();
 connectDB();
@@ -45,6 +46,12 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(cookieParser());
 
+app.use(
+  "/api/payments/webhook/paystack",
+  express.raw({ type: "application/json" }),
+  paymentRoutes
+);
+
 // ❌ REMOVE THESE GLOBAL MIDDLEWARE
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -78,6 +85,7 @@ app.use(
 
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/payments", paymentRoutes);
 app.use("/api/setup", setupRoutes);
 
 app.get("/", (req, res) => {
