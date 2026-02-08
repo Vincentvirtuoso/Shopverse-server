@@ -49,7 +49,7 @@ app.use(cookieParser());
 app.use(
   "/api/payments/webhook/paystack",
   express.raw({ type: "application/json" }),
-  paymentRoutes
+  paymentRoutes,
 );
 
 // ❌ REMOVE THESE GLOBAL MIDDLEWARE
@@ -60,7 +60,7 @@ app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
     crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
-  })
+  }),
 );
 
 if (process.env.NODE_ENV === "production") {
@@ -80,7 +80,7 @@ app.use(
   "/api/auth",
   express.json({ limit: "10mb" }),
   express.urlencoded({ extended: true, limit: "10mb" }),
-  authRoutes
+  authRoutes,
 );
 
 app.use("/api/products", productRoutes);

@@ -17,7 +17,7 @@ export const signAccessToken = (user, roleConfig) =>
           : undefined,
     },
     roleConfig.tokenSecret,
-    { expiresIn: AUTH_CONFIG.access.expiresIn }
+    { expiresIn: AUTH_CONFIG.access.expiresIn },
   );
 
 export const signRefreshToken = (user, roleConfig) =>
@@ -28,5 +28,5 @@ export const signRefreshToken = (user, roleConfig) =>
       role: user.role,
     },
     roleConfig.refreshSecret,
-    { expiresIn: `${AUTH_CONFIG.refresh.expiresInDays}d` }
+    { expiresIn: `${AUTH_CONFIG.refresh.expiresInDays}d` },
   );

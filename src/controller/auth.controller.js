@@ -35,7 +35,11 @@ export const login = catchAsync(async (req, res, next) => {
 
   if (!email || !password) {
     return next(
-      new AppError("Please provide email and password", 400, "VALIDATION_ERROR")
+      new AppError(
+        "Please provide email and password",
+        400,
+        "VALIDATION_ERROR",
+      ),
     );
   }
 
@@ -48,7 +52,11 @@ export const login = catchAsync(async (req, res, next) => {
 
   if (!user.isActive) {
     return next(
-      new AppError("Account is deactivated. Contact support.", 403, "FORBIDDEN")
+      new AppError(
+        "Account is deactivated. Contact support.",
+        403,
+        "FORBIDDEN",
+      ),
     );
   }
 
@@ -67,6 +75,9 @@ export const login = catchAsync(async (req, res, next) => {
 
   const roleConfig = AUTH_CONFIG.roles[roleKey];
 
+  console.log("user", user);
+  console.log("role config", roleConfig);
+
   const accessToken = signAccessToken(user, roleConfig);
   const refreshToken = signRefreshToken(user, roleConfig);
 
@@ -77,7 +88,7 @@ export const login = catchAsync(async (req, res, next) => {
     tokenHash: refreshTokenHash,
     createdAt: new Date(),
     expiresAt: new Date(
-      Date.now() + AUTH_CONFIG.refresh.expiresInDays * 86400000
+      Date.now() + AUTH_CONFIG.refresh.expiresInDays * 86400000,
     ),
   });
 
@@ -87,7 +98,7 @@ export const login = catchAsync(async (req, res, next) => {
   res.cookie(
     roleConfig.refreshTokenName,
     refreshToken,
-    cookieOptions(AUTH_CONFIG.refresh.expiresInDays)
+    cookieOptions(AUTH_CONFIG.refresh.expiresInDays),
   );
 
   // Update stats
@@ -96,7 +107,7 @@ export const login = catchAsync(async (req, res, next) => {
     {
       $set: { "stats.lastLogin": new Date() },
       $inc: { "stats.loginCount": 1 },
-    }
+    },
   );
 
   const userData = {
@@ -138,7 +149,7 @@ export const logout = catchAsync(async (req, res) => {
     if (decoded?.id) {
       await User.updateOne(
         { _id: decoded.id },
-        { $set: { refreshTokens: [] } }
+        { $set: { refreshTokens: [] } },
       );
     }
   }
@@ -211,7 +222,6 @@ export const logoutAllDevices = catchAsync(async (req, res, next) => {
   }
 
   // Clear current session cookies first
-  const secure = process.env.NODE_ENV === "production";
   const cookieOptions = {
     httpOnly: true,
     secure,
@@ -342,7 +352,7 @@ export const verifyEmail = catchAsync(async (req, res, next) => {
 
   if (!token) {
     return next(
-      new AppError("Verification token is required", 400, "TOKEN_REQUIRED")
+      new AppError("Verification token is required", 400, "TOKEN_REQUIRED"),
     );
   }
 
@@ -367,8 +377,8 @@ export const verifyEmail = catchAsync(async (req, res, next) => {
       new AppError(
         "Invalid or expired verification token. Please request a new one.",
         400,
-        "INVALID_TOKEN"
-      )
+        "INVALID_TOKEN",
+      ),
     );
   }
 
@@ -398,7 +408,7 @@ export const resendVerificationEmail = catchAsync(async (req, res, next) => {
 
   if (!email) {
     return next(
-      new AppError("Please provide email address", 400, "VALIDATION_ERROR")
+      new AppError("Please provide email address", 400, "VALIDATION_ERROR"),
     );
   }
 
@@ -410,7 +420,7 @@ export const resendVerificationEmail = catchAsync(async (req, res, next) => {
 
   if (user.isEmailVerified) {
     return next(
-      new AppError("Email is already verified", 400, "ALREADY_VERIFIED")
+      new AppError("Email is already verified", 400, "ALREADY_VERIFIED"),
     );
   }
 
@@ -437,8 +447,8 @@ export const resendVerificationEmail = catchAsync(async (req, res, next) => {
       new AppError(
         "Failed to send verification email. Please try again later.",
         500,
-        "EMAIL_SEND_FAILED"
-      )
+        "EMAIL_SEND_FAILED",
+      ),
     );
   }
 });
@@ -481,13 +491,13 @@ export const refreshToken = catchAsync(async (req, res, next) => {
       // token reuse detected → revoke ALL
       await User.updateOne(
         { _id: decoded.id },
-        { $set: { refreshTokens: [] } }
+        { $set: { refreshTokens: [] } },
       );
       return next(new AppError("Session compromised. Login again.", 401));
     }
 
     user.refreshTokens = user.refreshTokens.filter(
-      (t) => t.tokenHash !== tokenHash
+      (t) => t.tokenHash !== tokenHash,
     );
 
     const newAccessToken = signAccessToken(user, roleConfig);
@@ -497,7 +507,7 @@ export const refreshToken = catchAsync(async (req, res, next) => {
       tokenHash: hashToken(newRefreshToken),
       createdAt: new Date(),
       expiresAt: new Date(
-        Date.now() + AUTH_CONFIG.refresh.expiresInDays * 86400000
+        Date.now() + AUTH_CONFIG.refresh.expiresInDays * 86400000,
       ),
     });
 
@@ -507,7 +517,7 @@ export const refreshToken = catchAsync(async (req, res, next) => {
     res.cookie(
       roleConfig.refreshTokenName,
       newRefreshToken,
-      cookieOptions(AUTH_CONFIG.refresh.expiresInDays)
+      cookieOptions(AUTH_CONFIG.refresh.expiresInDays),
     );
 
     // Build user data
@@ -545,7 +555,7 @@ export const refreshToken = catchAsync(async (req, res, next) => {
     }
     if (error.name === "TokenExpiredError") {
       return next(
-        new AppError("Refresh token expired", 401, "REFRESH_TOKEN_EXPIRED")
+        new AppError("Refresh token expired", 401, "REFRESH_TOKEN_EXPIRED"),
       );
     }
     return next(new AppError("Token refresh failed", 401, "REFRESH_FAILED"));
