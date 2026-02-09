@@ -8,7 +8,7 @@ export const verifyPayment = catchAsync(async (req, res, next) => {
 
   if (!reference) {
     return next(
-      new AppError("Payment reference is required", 400, "MISSING_REFERENCE")
+      new AppError("Payment reference is required", 400, "MISSING_REFERENCE"),
     );
   }
 
@@ -33,8 +33,8 @@ export const verifyPayment = catchAsync(async (req, res, next) => {
       new AppError(
         "Order not found for this payment reference",
         404,
-        "ORDER_NOT_FOUND"
-      )
+        "ORDER_NOT_FOUND",
+      ),
     );
   }
 
@@ -72,8 +72,8 @@ export const verifyPayment = catchAsync(async (req, res, next) => {
       new AppError(
         "Payment amount does not match order total",
         400,
-        "AMOUNT_MISMATCH"
-      )
+        "AMOUNT_MISMATCH",
+      ),
     );
   }
 
@@ -81,15 +81,17 @@ export const verifyPayment = catchAsync(async (req, res, next) => {
   order.payment.status = "paid";
   order.payment.paidAt = new Date(verificationResult.data.paidAt);
   order.payment.channel = verificationResult.data.channel;
-  order.status = "pending"; // Move from payment_pending to pending
+  order.status = "pending";
 
   // Add to status history
   order.statusHistory.push({
-    status: "pending",
+    status: "Success",
     timestamp: new Date(),
     note: "Payment verified and confirmed",
     updatedBy: order.customer.user,
   });
+
+  order.dates.confirmedAt = new Date();
 
   await order.save();
 
@@ -152,7 +154,7 @@ export const paystackWebhook = catchAsync(async (req, res, next) => {
       order.status = "pending";
 
       order.statusHistory.push({
-        status: "pending",
+        status: "Success",
         timestamp: new Date(),
         note: "Payment confirmed via webhook",
         updatedBy: order.customer.user,

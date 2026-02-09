@@ -253,6 +253,10 @@ export const createOrder = catchAsync(async (req, res, next) => {
         total,
         currency: "NGN",
       },
+      dates: {
+        paymentProcessedAt:
+          paymentMethod === "cash_on_delivery" ? null : new Date(),
+      },
       status:
         paymentMethod === "cash_on_delivery"
           ? "pending"
@@ -275,9 +279,15 @@ export const createOrder = catchAsync(async (req, res, next) => {
 
     // Add initial status to history
     order.statusHistory.push({
-      status: order.status,
+      status: "success",
       timestamp: new Date(),
       note: "Order created",
+      updatedBy: userId,
+    });
+    order.statusHistory.push({
+      status: "pending",
+      timestamp: new Date(),
+      note: "Order Status",
       updatedBy: userId,
     });
 
@@ -455,7 +465,10 @@ export const getOrder = catchAsync(async (req, res, next) => {
   const userId = req.user._id;
 
   const order = await Order.findOne({
-    _id: id,
+    $or: [
+      { _id: mongoose.Types.ObjectId.isValid(id) ? id : null },
+      { orderNumber: id },
+    ],
     "customer.user": userId,
     isDeleted: false,
   })

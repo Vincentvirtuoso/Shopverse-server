@@ -269,7 +269,8 @@ const OrderSchema = new mongoose.Schema(
         default: Date.now,
         index: true,
       },
-      paidAt: Date,
+      paymentProcessedAt: Date,
+      confirmedAt: Date,
       processedAt: Date,
       shippedAt: Date,
       deliveredAt: Date,
@@ -289,7 +290,7 @@ const OrderSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 OrderSchema.index({ "customer.user": 1, "dates.placedAt": -1 });
