@@ -26,7 +26,7 @@ const validateConfig = () => {
 
   if (missing.length > 0) {
     throw new Error(
-      `Missing required environment variables: ${missing.join(", ")}`
+      `Missing required environment variables: ${missing.join(", ")}`,
     );
   }
 };
@@ -56,13 +56,13 @@ export const sendEmail = async ({ to, subject, htmlContent, textContent }) => {
 
     console.log(`📧 Sending email to: ${to}`);
     console.log(
-      `📤 From: ${emailData.sender.name} <${emailData.sender.email}>`
+      `📤 From: ${emailData.sender.name} <${emailData.sender.email}>`,
     );
 
     const response = await brevoClient.sendTransacEmail(emailData);
 
     console.log(
-      `✅ Email sent successfully! Message ID: ${response.messageId}`
+      `✅ Email sent successfully! Message ID: ${response.messageId}`,
     );
     return response;
   } catch (error) {
@@ -71,7 +71,7 @@ export const sendEmail = async ({ to, subject, htmlContent, textContent }) => {
 
     // Re-throw with more context
     throw new Error(
-      `Email sending failed: ${error.response?.body?.message || error.message}`
+      `Email sending failed: ${error.response?.body?.message || error.message}`,
     );
   }
 };
@@ -522,20 +522,12 @@ If you didn't request a password reset, please ignore this email.
   });
 };
 
-// Add these functions to your existing email service file
-
-/**
- * Send order confirmation email
- * @param {string} email - Recipient email
- * @param {object} order - Order object
- * @param {string} firstName - Customer's first name
- * @param {string} [attachment] - Optional invoice attachment
- */
 export const sendOrderConfirmationEmail = async (
   email,
   order,
   firstName,
-  attachment = null
+  attachment = null,
+  shippingAddress = null,
 ) => {
   if (!email || !order || !firstName) {
     throw new Error("Email, order, and firstName are required");
@@ -584,7 +576,7 @@ export const sendOrderConfirmationEmail = async (
         ₦${(item.price?.final * item.quantity).toLocaleString()}
       </td>
     </tr>
-  `
+  `,
     )
     .join("");
 
@@ -620,7 +612,7 @@ export const sendOrderStatusUpdateEmail = async (
   email,
   order,
   status,
-  note = ""
+  note = "",
 ) => {
   if (!email || !order || !status) {
     throw new Error("Email, order, and status are required");
@@ -764,17 +756,17 @@ export const sendOrderStatusUpdateEmail = async (
                   status === "processing"
                     ? "🔄"
                     : status === "shipped"
-                    ? "🚚"
-                    : status === "delivered"
-                    ? "✅"
-                    : status === "cancelled"
-                    ? "❌"
-                    : "📦"
+                      ? "🚚"
+                      : status === "delivered"
+                        ? "✅"
+                        : status === "cancelled"
+                          ? "❌"
+                          : "📦"
                 }
               </div>
               <h2 style="margin: 0; color: ${statusInfo.color};">${
-      statusInfo.title
-    }</h2>
+                statusInfo.title
+              }</h2>
               <p style="color: #6b7280; margin: 12px 0;">${
                 statusInfo.message
               }</p>
@@ -800,8 +792,8 @@ export const sendOrderStatusUpdateEmail = async (
               <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                 <span>Items:</span>
                 <span>${order.items.length} item${
-      order.items.length !== 1 ? "s" : ""
-    }</span>
+                  order.items.length !== 1 ? "s" : ""
+                }</span>
               </div>
             </div>
           </div>
@@ -811,8 +803,8 @@ export const sendOrderStatusUpdateEmail = async (
             <p>If you have any questions, please contact our support team.</p>
             <p style="margin-top: 20px; font-size: 12px;">
               &copy; ${currentYear} ${
-      process.env.APP_NAME || "Your Company"
-    }. All rights reserved.
+                process.env.APP_NAME || "Your Company"
+              }. All rights reserved.
             </p>
           </div>
         </div>
@@ -995,8 +987,8 @@ export const sendPaymentConfirmationEmail = async (email, order, firstName) => {
             <p>You'll receive another email when your order ships.</p>
             <p style="margin-top: 20px; font-size: 12px;">
               &copy; ${currentYear} ${
-      process.env.APP_NAME || "Your Company"
-    }. All rights reserved.
+                process.env.APP_NAME || "Your Company"
+              }. All rights reserved.
             </p>
           </div>
         </div>
@@ -1049,7 +1041,7 @@ export const sendShippingConfirmationEmail = async (
   order,
   trackingNumber,
   courier,
-  estimatedDelivery
+  estimatedDelivery,
 ) => {
   if (!email || !order || !trackingNumber) {
     throw new Error("Email, order, and trackingNumber are required");
@@ -1179,8 +1171,8 @@ export const sendShippingConfirmationEmail = async (
                 ${order.shipping?.address?.addressLine1 || ""}<br/>
                 ${order.shipping?.address?.addressLine2 || ""}<br/>
                 ${order.shipping?.address?.city || ""}, ${
-      order.shipping?.address?.state || ""
-    }<br/>
+                  order.shipping?.address?.state || ""
+                }<br/>
                 ${order.shipping?.address?.country || "Nigeria"}
               </p>
             </div>
@@ -1191,8 +1183,8 @@ export const sendShippingConfirmationEmail = async (
             <p>Questions about your shipment? Contact our support team.</p>
             <p style="margin-top: 20px; font-size: 12px;">
               &copy; ${currentYear} ${
-      process.env.APP_NAME || "Your Company"
-    }. All rights reserved.
+                process.env.APP_NAME || "Your Company"
+              }. All rights reserved.
             </p>
           </div>
         </div>
@@ -1243,7 +1235,7 @@ export const sendOrderCancellationEmail = async (
   order,
   firstName,
   reason = "",
-  refundAmount = 0
+  refundAmount = 0,
 ) => {
   if (!email || !order || !firstName) {
     throw new Error("Email, order, and firstName are required");
@@ -1397,8 +1389,8 @@ export const sendOrderCancellationEmail = async (
             <p>If you have any questions, please contact our support team.</p>
             <p style="margin-top: 20px; font-size: 12px;">
               &copy; ${currentYear} ${
-      process.env.APP_NAME || "Your Company"
-    }. All rights reserved.
+                process.env.APP_NAME || "Your Company"
+              }. All rights reserved.
             </p>
           </div>
         </div>

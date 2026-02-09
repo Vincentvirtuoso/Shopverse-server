@@ -352,11 +352,14 @@ export const createOrder = catchAsync(async (req, res, next) => {
       }
     }
 
-    sendOrderConfirmationEmail(user.email, order, user.firstName).catch(
-      (err) => {
-        console.error("Failed to send order confirmation email:", err);
-      },
-    );
+    sendOrderConfirmationEmail(
+      user.email,
+      order,
+      user.firstName,
+      shippingAddress,
+    ).catch((err) => {
+      console.error("Failed to send order confirmation email:", err);
+    });
 
     // Return success response
     res.status(201).json({
