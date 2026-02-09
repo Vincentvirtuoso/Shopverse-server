@@ -23,6 +23,9 @@ export const createOrder = catchAsync(async (req, res, next) => {
     notes,
     billingAddress,
     paymentMethod,
+    paymentReference,
+    paymentStatus,
+    amount,
   } = req.body;
 
   const userId = req.user._id;
@@ -42,7 +45,7 @@ export const createOrder = catchAsync(async (req, res, next) => {
     if (!items || !Array.isArray(items) || items.length === 0) {
       await session.abortTransaction();
       return next(
-        new AppError("Order must have at least one item", 400, "NO_ITEMS")
+        new AppError("Order must have at least one item", 400, "NO_ITEMS"),
       );
     }
 
@@ -56,8 +59,8 @@ export const createOrder = catchAsync(async (req, res, next) => {
         new AppError(
           "Complete shipping address is required",
           400,
-          "INVALID_ADDRESS"
-        )
+          "INVALID_ADDRESS",
+        ),
       );
     }
 
@@ -65,19 +68,23 @@ export const createOrder = catchAsync(async (req, res, next) => {
     if (!validPaymentMethods.includes(paymentMethod)) {
       await session.abortTransaction();
       return next(
-        new AppError("Invalid payment method", 400, "INVALID_PAYMENT_METHOD")
+        new AppError("Invalid payment method", 400, "INVALID_PAYMENT_METHOD"),
       );
     }
 
     const productIds = items.map((item) => item.productId);
     const products = await Product.find({ _id: { $in: productIds } }).session(
-      session
+      session,
     );
 
     if (products.length !== productIds.length) {
       await session.abortTransaction();
       return next(
-        new AppError("One or more products not found", 404, "PRODUCT_NOT_FOUND")
+        new AppError(
+          "One or more products not found",
+          404,
+          "PRODUCT_NOT_FOUND",
+        ),
       );
     }
 
@@ -95,7 +102,7 @@ export const createOrder = catchAsync(async (req, res, next) => {
       ) {
         await session.abortTransaction();
         return next(
-          new AppError("Invalid quantity for product", 400, "INVALID_QUANTITY")
+          new AppError("Invalid quantity for product", 400, "INVALID_QUANTITY"),
         );
       }
 
@@ -113,8 +120,8 @@ export const createOrder = catchAsync(async (req, res, next) => {
             new AppError(
               `Variant not found for ${product.name}`,
               404,
-              "VARIANT_NOT_FOUND"
-            )
+              "VARIANT_NOT_FOUND",
+            ),
           );
         }
 
@@ -138,8 +145,8 @@ export const createOrder = catchAsync(async (req, res, next) => {
           new AppError(
             `Insufficient stock for ${itemName}. Available: ${stockToCheck}`,
             400,
-            "INSUFFICIENT_STOCK"
-          )
+            "INSUFFICIENT_STOCK",
+          ),
         );
       }
 
@@ -176,7 +183,7 @@ export const createOrder = catchAsync(async (req, res, next) => {
         discountCode,
         subtotal,
         userId,
-        session
+        session,
       );
       if (discountResult.valid) {
         discountAmount = discountResult.amount;
@@ -196,7 +203,7 @@ export const createOrder = catchAsync(async (req, res, next) => {
     // Generate unique order number
     const orderNumber = await generateUniqueOrderNumber(async (orderNum) => {
       const existing = await Order.findOne({ orderNumber: orderNum }).session(
-        session
+        session,
       );
       return !!existing;
     }, 5);
@@ -228,7 +235,9 @@ export const createOrder = catchAsync(async (req, res, next) => {
         method: paymentMethod,
         status: "pending",
         transactionId:
-          paymentMethod === "paystack" ? `${orderNumber}-${Date.now()}` : null,
+          paymentMethod === "paystack"
+            ? paymentReference || `${orderNumber}-${Date.now()}`
+            : null,
       },
       pricing: {
         subtotal,
@@ -245,7 +254,9 @@ export const createOrder = catchAsync(async (req, res, next) => {
         currency: "NGN",
       },
       status:
-        paymentMethod === "cash_on_delivery" ? "pending" : "payment_pending",
+        paymentMethod === "cash_on_delivery"
+          ? "pending"
+          : paymentStatus || "payment_pending",
       notes: notes || "",
       ...(billingAddress && {
         billingAddress: {
@@ -289,7 +300,6 @@ export const createOrder = catchAsync(async (req, res, next) => {
       await Product.updateOne(updateQuery, updateOperation, updateOptions);
     }
 
-    // Update user stats with atomic operations
     await User.updateOne(
       { _id: userId },
       {
@@ -298,18 +308,13 @@ export const createOrder = catchAsync(async (req, res, next) => {
           "stats.totalSpent": total,
         },
       },
-      { session }
+      { session },
     );
 
     // Commit the transaction
     await session.commitTransaction();
     isTransactionCommitted = true;
 
-    // ========== POST-TRANSACTION OPERATIONS ==========
-    // Everything below happens AFTER the transaction is committed
-    // Errors here should NOT abort the transaction
-
-    // Prepare order response for frontend
     const orderResponse = {
       id: order._id,
       orderNumber: order.orderNumber,
@@ -350,7 +355,7 @@ export const createOrder = catchAsync(async (req, res, next) => {
     sendOrderConfirmationEmail(user.email, order, user.firstName).catch(
       (err) => {
         console.error("Failed to send order confirmation email:", err);
-      }
+      },
     );
 
     // Return success response
@@ -380,8 +385,8 @@ export const createOrder = catchAsync(async (req, res, next) => {
         new AppError(
           "Order number conflict, please try again",
           409,
-          "DUPLICATE_ORDER_NUMBER"
-        )
+          "DUPLICATE_ORDER_NUMBER",
+        ),
       );
     }
 
@@ -389,8 +394,8 @@ export const createOrder = catchAsync(async (req, res, next) => {
       new AppError(
         "Failed to create order. Please try again.",
         500,
-        "ORDER_CREATION_FAILED"
-      )
+        "ORDER_CREATION_FAILED",
+      ),
     );
   } finally {
     session.endSession();
@@ -532,7 +537,7 @@ export const updateOrderStatus = catchAsync(async (req, res, next) => {
   // Check user permissions
   if (!["admin", "seller", "super_admin"].includes(req.user.role)) {
     return next(
-      new AppError("Not authorized to update order status", 403, "FORBIDDEN")
+      new AppError("Not authorized to update order status", 403, "FORBIDDEN"),
     );
   }
 
@@ -545,15 +550,15 @@ export const updateOrderStatus = catchAsync(async (req, res, next) => {
   // Validate status transition
   const validTransitions = getValidStatusTransitions(
     order.status,
-    req.user.role
+    req.user.role,
   );
   if (!validTransitions.includes(status)) {
     return next(
       new AppError(
         `Cannot transition from ${order.status} to ${status}`,
         400,
-        "INVALID_STATUS_TRANSITION"
-      )
+        "INVALID_STATUS_TRANSITION",
+      ),
     );
   }
 
@@ -580,7 +585,7 @@ export const updateOrderStatus = catchAsync(async (req, res, next) => {
   await sendOrderStatusUpdateEmail(
     order.customer.email,
     order,
-    order.customer.firstName
+    order.customer.firstName,
   );
 
   res.status(200).json({
@@ -613,8 +618,8 @@ export const cancelOrder = catchAsync(async (req, res, next) => {
       new AppError(
         `Order cannot be cancelled. Current status: ${order.status}`,
         400,
-        "ORDER_NOT_CANCELLABLE"
-      )
+        "ORDER_NOT_CANCELLABLE",
+      ),
     );
   }
 
@@ -632,7 +637,7 @@ export const cancelOrder = catchAsync(async (req, res, next) => {
   await order.updateStatus(
     "cancelled",
     `Cancelled by customer. Reason: ${reason}`,
-    userId
+    userId,
   );
   order.dates.cancelledAt = new Date();
 
@@ -672,21 +677,21 @@ export const requestReturn = catchAsync(async (req, res, next) => {
   // Check if order is returnable
   if (!order.isReturnable) {
     return next(
-      new AppError("Return window has expired", 400, "RETURN_WINDOW_EXPIRED")
+      new AppError("Return window has expired", 400, "RETURN_WINDOW_EXPIRED"),
     );
   }
 
   // Validate return items
   const validItems = items.filter((returnItem) => {
     const orderItem = order.items.find(
-      (item) => item.product.toString() === returnItem.productId
+      (item) => item.product.toString() === returnItem.productId,
     );
     return orderItem && returnItem.quantity <= orderItem.quantity;
   });
 
   if (validItems.length === 0) {
     return next(
-      new AppError("No valid items to return", 400, "INVALID_RETURN_ITEMS")
+      new AppError("No valid items to return", 400, "INVALID_RETURN_ITEMS"),
     );
   }
 
@@ -956,7 +961,7 @@ export const confirmCashOnDelivery = catchAsync(async (req, res, next) => {
 
   if (order.payment.method !== "cash_on_delivery") {
     return next(
-      new AppError("Order is not Cash on Delivery", 400, "NOT_COD_ORDER")
+      new AppError("Order is not Cash on Delivery", 400, "NOT_COD_ORDER"),
     );
   }
 
@@ -965,8 +970,8 @@ export const confirmCashOnDelivery = catchAsync(async (req, res, next) => {
       new AppError(
         "Payment already processed",
         400,
-        "PAYMENT_ALREADY_PROCESSED"
-      )
+        "PAYMENT_ALREADY_PROCESSED",
+      ),
     );
   }
 

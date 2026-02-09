@@ -24,8 +24,8 @@ export const setupSuperAdmin = catchAsync(async (req, res, next) => {
       new AppError(
         "Super admin account already exists. Setup can only be done once.",
         400,
-        "SETUP_COMPLETE"
-      )
+        "SETUP_COMPLETE",
+      ),
     );
   }
 
@@ -45,15 +45,15 @@ export const setupSuperAdmin = catchAsync(async (req, res, next) => {
       new AppError(
         "Please provide all required fields: firstName, lastName, email, password",
         400,
-        "VALIDATION_ERROR"
-      )
+        "VALIDATION_ERROR",
+      ),
     );
   }
 
   const existingUser = await User.findOne({ email: email.toLowerCase() });
   if (existingUser) {
     return next(
-      new AppError("Email is already registered", 409, "EMAIL_EXISTS")
+      new AppError("Email is already registered", 409, "EMAIL_EXISTS"),
     );
   }
 
@@ -63,8 +63,8 @@ export const setupSuperAdmin = catchAsync(async (req, res, next) => {
       new AppError(
         "Password must be at least 8 characters long",
         400,
-        "WEAK_PASSWORD"
-      )
+        "WEAK_PASSWORD",
+      ),
     );
   }
 
@@ -119,13 +119,13 @@ export const setupSuperAdmin = catchAsync(async (req, res, next) => {
       isSeller: superAdmin.isSeller,
     },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" },
   );
 
   const refreshToken = jwt.sign(
     { id: superAdmin._id },
     process.env.JWT_REFRESH_SECRET,
-    { expiresIn: "30d" }
+    { expiresIn: "30d" },
   );
 
   // 7. Set cookies
@@ -141,8 +141,8 @@ export const setupSuperAdmin = catchAsync(async (req, res, next) => {
     cookieOptions.domain = process.env.COOKIE_DOMAIN;
   }
 
-  res.cookie("token", token, cookieOptions);
-  res.cookie("refreshToken", refreshToken, {
+  res.cookie("admin_token", token, cookieOptions);
+  res.cookie("admin_refresh_token", refreshToken, {
     ...cookieOptions,
     expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
   });
@@ -187,8 +187,8 @@ export const resetSetup = catchAsync(async (req, res, next) => {
       new AppError(
         "This endpoint is not available in production",
         403,
-        "FORBIDDEN"
-      )
+        "FORBIDDEN",
+      ),
     );
   }
 

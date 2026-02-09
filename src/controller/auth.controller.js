@@ -18,17 +18,6 @@ import { cookieOptions } from "../utils/auth.cookies.js";
 
 const secure = process.env.NODE_ENV === "production";
 
-const createCookieOptions = (days) => {
-  const options = {
-    expires: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
-    httpOnly: true,
-    secure,
-    sameSite: secure ? "none" : "lax",
-  };
-
-  return options;
-};
-
 // ===== LOGIN =====
 export const login = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
@@ -74,9 +63,6 @@ export const login = catchAsync(async (req, res, next) => {
     user.role === "admin" || user.role === "super_admin" ? user.role : "user";
 
   const roleConfig = AUTH_CONFIG.roles[roleKey];
-
-  console.log("user", user);
-  console.log("role config", roleConfig);
 
   const accessToken = signAccessToken(user, roleConfig);
   const refreshToken = signRefreshToken(user, roleConfig);

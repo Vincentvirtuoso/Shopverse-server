@@ -1,8 +1,9 @@
 const secure = process.env.NODE_ENV === "production";
 
-export const cookieOptions = (days) => ({
+export const cookieOptions = (days, role) => ({
   httpOnly: true,
   secure,
   sameSite: secure ? "none" : "lax",
   expires: new Date(Date.now() + days * 86400000),
+  path: "/",
 });

@@ -2,57 +2,48 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import AppError from "../utils/AppError.js";
 import catchAsync from "../utils/catchAsync.js";
-import { AUTH_CONFIG } from "../config/auth.config.js";
 
 export const protect = catchAsync(async (req, res, next) => {
   const cookies = req.cookies || {};
+  const appType = req.headers["x-app-type"];
 
-  const accessToken = cookies.admin_token || cookies.user_token;
+  if (!appType) {
+    return next(new AppError("App type missing", 400));
+  }
+
+  let accessToken;
+  let secret;
+
+  if (appType === "admin") {
+    accessToken = cookies.admin_token;
+    secret = process.env.ADMIN_TOKEN_SECRET;
+  } else {
+    accessToken = cookies.user_token;
+    secret = process.env.JWT_SECRET;
+  }
 
   if (!accessToken) {
-    return next(
-      new AppError(
-        "Authentication required. Please log in.",
-        401,
-        "UNAUTHORIZED"
-      )
-    );
+    return next(new AppError("Authentication required. Please log in.", 401));
   }
 
+  // ✅ VERIFY FIRST (never decode first)
   let decoded;
-
   try {
-    decoded = jwt.decode(accessToken);
-    console.log("Decoded token:", decoded);
-  } catch {
-    return next(new AppError("Invalid token", 401, "INVALID_TOKEN"));
-  }
-
-  if (!decoded?.id || !decoded?.role) {
-    return next(new AppError("Malformed token", 401, "INVALID_TOKEN"));
-  }
-
-  const normalizeRole = (role) => {
-    if (role === "admin" || role === "super_admin") return role;
-    return "user";
-  };
-
-  const roleKey = decoded.role;
-  const roleConfig = AUTH_CONFIG.roles[roleKey];
-
-  if (!roleConfig) {
-    roleConfig = AUTH_CONFIG.roles.user;
-  }
-
-  try {
-    jwt.verify(accessToken, roleConfig.tokenSecret);
-  } catch (error) {
-    if (error.name === "TokenExpiredError") {
-      return next(
-        new AppError("Session expired. Please refresh.", 401, "TOKEN_EXPIRED")
-      );
+    decoded = jwt.verify(accessToken, secret);
+  } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      return next(new AppError("Session expired", 401));
     }
-    return next(new AppError("Invalid token", 401, "INVALID_TOKEN"));
+    return next(new AppError("Invalid token", 401));
+  }
+
+  // 🔒 HARD ROLE BOUNDARY
+  if (appType === "admin" && !["admin", "super_admin"].includes(decoded.role)) {
+    return next(new AppError("Admin access only", 403));
+  }
+
+  if (appType === "user" && ["admin", "super_admin"].includes(decoded.role)) {
+    return next(new AppError("User access only", 403));
   }
 
   const user = await User.findById(decoded.id).lean();
@@ -62,13 +53,7 @@ export const protect = catchAsync(async (req, res, next) => {
   }
 
   if (!user.isActive) {
-    return next(
-      new AppError(
-        "Account is deactivated. Contact support.",
-        403,
-        "ACCOUNT_DEACTIVATED"
-      )
-    );
+    return next(new AppError("Account is deactivated", 403));
   }
 
   req.user = {
@@ -94,8 +79,8 @@ export const restrictTo = (...roles) => {
         new AppError(
           "You do not have permission to perform this action.",
           403,
-          "FORBIDDEN"
-        )
+          "FORBIDDEN",
+        ),
       );
     }
     next();
@@ -111,8 +96,8 @@ export const requireSeller = (req, res, next) => {
       new AppError(
         "Seller account required to access this resource.",
         403,
-        "SELLER_REQUIRED"
-      )
+        "SELLER_REQUIRED",
+      ),
     );
   }
   next();
@@ -121,7 +106,7 @@ export const requireSeller = (req, res, next) => {
 export const requireVerifiedSeller = catchAsync(async (req, res, next) => {
   if (!req.user.isSeller) {
     return next(
-      new AppError("Seller account required.", 403, "SELLER_REQUIRED")
+      new AppError("Seller account required.", 403, "SELLER_REQUIRED"),
     );
   }
 
@@ -134,8 +119,8 @@ export const requireVerifiedSeller = catchAsync(async (req, res, next) => {
       new AppError(
         "Seller account must be verified.",
         403,
-        "SELLER_NOT_VERIFIED"
-      )
+        "SELLER_NOT_VERIFIED",
+      ),
     );
   }
 
