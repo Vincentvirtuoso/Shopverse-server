@@ -151,7 +151,8 @@ export const createOrder = catchAsync(async (req, res, next) => {
       }
 
       const itemSubtotal = finalPrice * item.quantity;
-      const itemTax = itemSubtotal * 0.045;
+      const itemTax = 0;
+      // itemSubtotal * 0.045;
 
       orderItems.push({
         product: product._id,
