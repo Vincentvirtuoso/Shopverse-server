@@ -11,6 +11,7 @@ import productRoutes from "./routes/product.route.js";
 import setupRoutes from "./routes/setupRoutes.js";
 import orderRoutes from "./routes/order.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
+import customersRoutes from "./routes/customers.routes.js";
 
 dotenv.config();
 connectDB();
@@ -93,6 +94,7 @@ app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/setup", setupRoutes);
+app.use("/api/admin/customers", customersRoutes);
 
 app.get("/", (req, res) => {
   res.json({
