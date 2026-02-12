@@ -1,4 +1,4 @@
-import Order from "../models/Orders";
+import Order from "../models/Orders.js";
 import mongoose from "mongoose";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
