@@ -23,6 +23,8 @@ export const createOrder = catchAsync(async (req, res, next) => {
     paymentReference,
     paymentStatus,
     amount,
+    saveShippingInfo,
+    savedShippingInfo,
   } = req.body;
 
   const userId = req.user._id;
@@ -318,7 +320,44 @@ export const createOrder = catchAsync(async (req, res, next) => {
       },
       { session },
     );
+    if (saveShippingInfo) {
+      const user = await User.findById(req.user.id);
 
+      if (!user) {
+        return next(new AppError("User not found", 404));
+      }
+
+      const newAddress = {
+        type: "home",
+        isDefault: true,
+        street: savedShippingInfo.addressLine1,
+        apartment: savedShippingInfo.addressLine2,
+        city: savedShippingInfo.city,
+        state: savedShippingInfo.state,
+        country: savedShippingInfo.country,
+        postalCode: savedShippingInfo.postalCode,
+        phone: savedShippingInfo.phone,
+        instructions: savedShippingInfo.instructions,
+      };
+
+      user.addresses = user.addresses.map((addr) => ({
+        ...addr.toObject(),
+        isDefault: false,
+      }));
+
+      const alreadyExists = user.addresses.some(
+        (addr) =>
+          addr.street === newAddress.street &&
+          addr.city === newAddress.city &&
+          addr.postalCode === newAddress.postalCode,
+      );
+
+      if (!alreadyExists) {
+        user.addresses.push(newAddress);
+      }
+
+      await user.save();
+    }
     // Commit the transaction
     await session.commitTransaction();
     isTransactionCommitted = true;

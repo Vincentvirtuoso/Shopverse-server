@@ -22,28 +22,28 @@ import {
 
 const router = express.Router();
 
-// router.route("/webhook/paystack").post(processPaystackWebhook);
-
-// Protected routes (require authentication)
 router.use(protect);
 
-router.route("/").post(createOrder);
-router.route("/my-orders").get(getMyOrders);
-router.route("/:id").get(getOrder);
-router.route("/:id/cancel").patch(cancelOrder);
-router.route("/:id/returns").post(requestReturn);
-router.route("/:id/invoice").get(getInvoice);
-router.route("/:id/confirm-cod").post(confirmCashOnDelivery);
+router.post("/", createOrder);
+router.get("/my-orders", getMyOrders);
 
-// Admin/Seller routes
-router.route("/stats/sales").get(restrictTo("admin"), getSalesStats);
-router.use(restrictTo("admin", "super_admin", "seller"));
-router.route("/admin").get(getAllOrders);
-router.route("/:id/status").patch(updateOrderStatus);
-router.get("/analytics", getOrderAnalytics);
-router.get("/fufilment/queue", getFulfillmentQueue);
-router.patch("/bulk-update", bulkUpdateFulfillment);
-router.get("/get-returns", getReturnsDashboard);
-router.get("/export", exportOrders);
+router.patch("/:id/cancel", cancelOrder);
+router.post("/:id/returns", requestReturn);
+router.get("/:id/invoice", getInvoice);
+router.post("/:id/confirm-cod", confirmCashOnDelivery);
+
+router.use("/admin", restrictTo("admin", "super_admin", "seller"));
+
+router.get("/admin", getAllOrders);
+router.patch("/admin/:id/status", updateOrderStatus);
+// router.patch("/admin/:id/ship", );
+router.get("/admin/analytics", getOrderAnalytics);
+router.get("/admin/fulfillment/queue", getFulfillmentQueue);
+router.patch("/admin/bulk-update", bulkUpdateFulfillment);
+router.get("/admin/returns", getReturnsDashboard);
+router.get("/admin/export", exportOrders);
+router.get("/admin/stats", getSalesStats);
+
+router.get("/:id", getOrder);
 
 export default router;

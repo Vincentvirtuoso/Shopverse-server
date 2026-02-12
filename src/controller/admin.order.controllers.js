@@ -3,133 +3,124 @@ import mongoose from "mongoose";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
 import { sendOrderStatusUpdateEmail } from "../utils/emailService.js";
+import {
+  calculateAverageOrderAge,
+  getDateRange,
+} from "../utils/order.utils.js";
 
 export const getOrderAnalytics = catchAsync(async (req, res, next) => {
   if (!["admin", "super_admin"].includes(req.user.role)) {
     return next(new AppError("Not authorized", 403, "FORBIDDEN"));
   }
 
-  const { timeframe = "30d", groupBy = "day" } = req.query;
+  const { timeframe = "30d" } = req.query;
 
-  const dateRange = getDateRange(timeframe);
+  const { start: currentStart, end: currentEnd } = getDateRange(timeframe);
+
+  const duration = currentEnd.getTime() - currentStart.getTime();
+
+  const previousStart = new Date(currentStart.getTime() - duration);
+  const previousEnd = new Date(currentStart.getTime());
 
   const analytics = await Order.aggregate([
     {
       $match: {
         isDeleted: false,
-        "dates.placedAt": { $gte: dateRange.start, $lte: dateRange.end },
+        "dates.placedAt": {
+          $gte: previousStart,
+          $lte: currentEnd,
+        },
       },
     },
     {
-      $facet: {
-        // Order metrics
-        orderMetrics: [
-          {
-            $group: {
-              _id: null,
-              totalOrders: { $sum: 1 },
-              completedOrders: {
-                $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
-              },
-              cancelledOrders: {
-                $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
-              },
-              refundedOrders: {
-                $sum: { $cond: [{ $eq: ["$status", "refunded"] }, 1, 0] },
-              },
-            },
-          },
-        ],
-
-        // Revenue metrics
-        revenueMetrics: [
-          {
-            $group: {
-              _id: null,
-              grossRevenue: { $sum: "$pricing.total" },
-              netRevenue: {
-                $sum: {
-                  $subtract: [
-                    "$pricing.total",
-                    { $add: ["$pricing.discount.amount", "$pricing.shipping"] },
-                  ],
-                },
-              },
-              averageOrderValue: { $avg: "$pricing.total" },
-              totalDiscounts: { $sum: "$pricing.discount.amount" },
-              totalShipping: { $sum: "$pricing.shipping" },
-              totalTax: { $sum: "$pricing.tax.total" },
-            },
-          },
-        ],
-
-        // Payment method breakdown
-        paymentMethods: [
-          {
-            $group: {
-              _id: "$payment.method",
-              count: { $sum: 1 },
-              totalAmount: { $sum: "$pricing.total" },
-            },
-          },
-        ],
-
-        // Status distribution
-        statusDistribution: [
-          {
-            $group: {
-              _id: "$status",
-              count: { $sum: 1 },
-              totalAmount: { $sum: "$pricing.total" },
-            },
-          },
-        ],
-
-        // Customer metrics
-        customerMetrics: [
-          {
-            $group: {
-              _id: "$customer.user",
-              ordersCount: { $sum: 1 },
-              totalSpent: { $sum: "$pricing.total" },
-            },
-          },
-          {
-            $group: {
-              _id: null,
-              uniqueCustomers: { $sum: 1 },
-              repeatCustomers: {
-                $sum: { $cond: [{ $gte: ["$ordersCount", 2] }, 1, 0] },
-              },
-              avgOrderPerCustomer: { $avg: "$ordersCount" },
-              avgSpentPerCustomer: { $avg: "$totalSpent" },
-            },
-          },
-        ],
-
-        // Geographic distribution
-        geographicDistribution: [
-          {
-            $group: {
-              _id: "$shipping.address.state",
-              orders: { $sum: 1 },
-              revenue: { $sum: "$pricing.total" },
-            },
-          },
-          { $sort: { orders: -1 } },
-          { $limit: 10 },
-        ],
+      $addFields: {
+        period: {
+          $cond: [
+            { $gte: ["$dates.placedAt", currentStart] },
+            "current",
+            "previous",
+          ],
+        },
+      },
+    },
+    {
+      $group: {
+        _id: "$period",
+        totalOrders: { $sum: 1 },
+        grossRevenue: { $sum: "$pricing.total" },
+        completedOrders: {
+          $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+        },
+        cancelledOrders: {
+          $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
+        },
+        averageOrderValue: { $avg: "$pricing.total" },
       },
     },
   ]);
 
+  // Convert aggregation result to object
+  const formatted = {
+    current: {},
+    previous: {},
+  };
+
+  analytics.forEach((item) => {
+    formatted[item._id] = item;
+  });
+
+  const calculateChange = (current = 0, previous = 0) => {
+    if (!previous) return previous === 0 && current > 0 ? 100 : 0;
+    return Number((((current - previous) / previous) * 100).toFixed(2));
+  };
+
+  const response = {
+    timeframe,
+    totalOrders: {
+      current: formatted.current?.totalOrders || 0,
+      previous: formatted.previous?.totalOrders || 0,
+      percentageChange: calculateChange(
+        formatted.current?.totalOrders,
+        formatted.previous?.totalOrders,
+      ),
+    },
+    grossRevenue: {
+      current: formatted.current?.grossRevenue || 0,
+      previous: formatted.previous?.grossRevenue || 0,
+      percentageChange: calculateChange(
+        formatted.current?.grossRevenue,
+        formatted.previous?.grossRevenue,
+      ),
+    },
+    completedOrders: {
+      current: formatted.current?.completedOrders || 0,
+      previous: formatted.previous?.completedOrders || 0,
+      percentageChange: calculateChange(
+        formatted.current?.completedOrders,
+        formatted.previous?.completedOrders,
+      ),
+    },
+    cancelledOrders: {
+      current: formatted.current?.cancelledOrders || 0,
+      previous: formatted.previous?.cancelledOrders || 0,
+      percentageChange: calculateChange(
+        formatted.current?.cancelledOrders,
+        formatted.previous?.cancelledOrders,
+      ),
+    },
+    averageOrderValue: {
+      current: formatted.current?.averageOrderValue || 0,
+      previous: formatted.previous?.averageOrderValue || 0,
+      percentageChange: calculateChange(
+        formatted.current?.averageOrderValue,
+        formatted.previous?.averageOrderValue,
+      ),
+    },
+  };
+
   res.status(200).json({
     status: "success",
-    data: {
-      timeframe,
-      analytics: analytics[0],
-      dateRange,
-    },
+    data: response,
   });
 });
 
@@ -737,6 +728,7 @@ export const getAllOrders = catchAsync(async (req, res, next) => {
   const [orders, total] = await Promise.all([
     Order.find(query)
       .populate("customer.user", "firstName lastName email")
+      .populate("items.product", "name image images")
       .sort(sortBy)
       .skip(skip)
       .limit(parseInt(limit)),
