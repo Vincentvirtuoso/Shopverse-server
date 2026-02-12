@@ -18,9 +18,25 @@ const uploadToCloudinary = async (file, folder = "products", options = {}) => {
       ...options,
     };
 
-    const result = await cloudinary.uploader.upload(file.path, uploadOptions);
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        uploadOptions,
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        },
+      );
 
-    fs.unlinkSync(file.path);
+      if (file.buffer) {
+        uploadStream.end(file.buffer);
+      } else if (file.path) {
+        fs.createReadStream(file.path).pipe(uploadStream);
+      }
+    });
+
+    if (file.path && fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
 
     return {
       success: true,
@@ -32,7 +48,7 @@ const uploadToCloudinary = async (file, folder = "products", options = {}) => {
       height: result.height,
     };
   } catch (error) {
-    if (fs.existsSync(file.path)) {
+    if (file.path && fs.existsSync(file.path)) {
       fs.unlinkSync(file.path);
     }
     return {

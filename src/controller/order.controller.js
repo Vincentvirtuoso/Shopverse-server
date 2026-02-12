@@ -9,10 +9,7 @@ import {
   calculateShippingCost,
   generateUniqueOrderNumber,
 } from "../utils/helpers.js";
-import {
-  sendOrderConfirmationEmail,
-  sendOrderStatusUpdateEmail,
-} from "../utils/emailService.js";
+import { sendOrderConfirmationEmail } from "../utils/emailService.js";
 import { generatePaystackPayment } from "../utils/paystack.js";
 
 export const createOrder = catchAsync(async (req, res, next) => {
@@ -433,34 +430,6 @@ const calculateEstimatedDelivery = () => {
   return deliveryDate;
 };
 
-// Helper function to generate Paystack payment
-// const generatePaystackPayment = async (order) => {
-//   try {
-//     const Paystack = require("paystack")(process.env.PAYSTACK_SECRET_KEY);
-
-//     const response = await Paystack.transaction.initialize({
-//       email: order.customer.email,
-//       amount: order.pricing.total * 100, // Convert to kobo
-//       reference: order.payment.transactionId,
-//       metadata: {
-//         orderId: order._id.toString(),
-//         orderNumber: order.orderNumber,
-//         customerId: order.customer.user.toString(),
-//       },
-//       callback_url: `${process.env.FRONTEND_URL}/order-success?reference=${order.payment.transactionId}`,
-//     });
-
-//     return response.data;
-//   } catch (error) {
-//     console.error("Paystack payment generation failed:", error);
-//     throw new AppError(
-//       "Payment gateway error. Please try again.",
-//       500,
-//       "PAYMENT_GATEWAY_ERROR"
-//     );
-//   }
-// };
-
 export const getOrder = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user._id;
@@ -542,74 +511,6 @@ export const getMyOrders = catchAsync(async (req, res, next) => {
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
       },
-    },
-  });
-});
-
-export const updateOrderStatus = catchAsync(async (req, res, next) => {
-  const { id } = req.params;
-  const { status, note } = req.body;
-  const userId = req.user._id;
-
-  // Check user permissions
-  if (!["admin", "seller", "super_admin"].includes(req.user.role)) {
-    return next(
-      new AppError("Not authorized to update order status", 403, "FORBIDDEN"),
-    );
-  }
-
-  const order = await Order.findById(id);
-
-  if (!order) {
-    return next(new AppError("Order not found", 404, "ORDER_NOT_FOUND"));
-  }
-
-  // Validate status transition
-  const validTransitions = getValidStatusTransitions(
-    order.status,
-    req.user.role,
-  );
-  if (!validTransitions.includes(status)) {
-    return next(
-      new AppError(
-        `Cannot transition from ${order.status} to ${status}`,
-        400,
-        "INVALID_STATUS_TRANSITION",
-      ),
-    );
-  }
-
-  // Update status
-  await order.updateStatus(status, note, userId);
-
-  // Update dates based on status
-  const dateFields = {
-    paid: "paidAt",
-    processing: "processedAt",
-    shipped: "shippedAt",
-    delivered: "deliveredAt",
-    completed: "completedAt",
-    cancelled: "cancelledAt",
-  };
-
-  if (dateFields[status]) {
-    order.dates[dateFields[status]] = new Date();
-  }
-
-  await order.save();
-
-  // Send status update notification
-  await sendOrderStatusUpdateEmail(
-    order.customer.email,
-    order,
-    order.customer.firstName,
-  );
-
-  res.status(200).json({
-    status: "success",
-    message: "Order status updated successfully",
-    data: {
-      order,
     },
   });
 });
@@ -763,96 +664,6 @@ export const getInvoice = catchAsync(async (req, res, next) => {
     status: "success",
     data: {
       invoice,
-    },
-  });
-});
-
-export const getAllOrders = catchAsync(async (req, res, next) => {
-  if (!["admin", "super_admin"].includes(req.user.role)) {
-    return next(new AppError("Not authorized", 403, "FORBIDDEN"));
-  }
-
-  const {
-    page = 1,
-    limit = 20,
-    status,
-    paymentStatus,
-    customerEmail,
-    startDate,
-    endDate,
-    search,
-    sortBy = "-dates.placedAt",
-  } = req.query;
-
-  const query = {
-    isDeleted: false,
-  };
-
-  // Apply filters
-  if (status) query.status = status;
-  if (paymentStatus) query["payment.status"] = paymentStatus;
-  if (customerEmail) query["customer.email"] = customerEmail;
-
-  // Date range filter
-  if (startDate || endDate) {
-    query["dates.placedAt"] = {};
-    if (startDate) query["dates.placedAt"].$gte = new Date(startDate);
-    if (endDate) query["dates.placedAt"].$lte = new Date(endDate);
-  }
-
-  // Search by order number or customer name
-  if (search) {
-    query.$or = [
-      { orderNumber: { $regex: search, $options: "i" } },
-      { "customer.firstName": { $regex: search, $options: "i" } },
-      { "customer.lastName": { $regex: search, $options: "i" } },
-      { "customer.email": { $regex: search, $options: "i" } },
-    ];
-  }
-
-  const skip = (page - 1) * limit;
-
-  const [orders, total] = await Promise.all([
-    Order.find(query)
-      .populate("customer.user", "firstName lastName email")
-      .sort(sortBy)
-      .skip(skip)
-      .limit(parseInt(limit)),
-    Order.countDocuments(query),
-  ]);
-
-  const totalPages = Math.ceil(total / limit);
-
-  // Calculate summary statistics
-  const stats = await Order.aggregate([
-    { $match: query },
-    {
-      $group: {
-        _id: null,
-        totalRevenue: { $sum: "$pricing.total" },
-        totalOrders: { $sum: 1 },
-        avgOrderValue: { $avg: "$pricing.total" },
-      },
-    },
-  ]);
-
-  res.status(200).json({
-    status: "success",
-    data: {
-      orders,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1,
-      },
-      stats: stats[0] || {
-        totalRevenue: 0,
-        totalOrders: 0,
-        avgOrderValue: 0,
-      },
     },
   });
 });
