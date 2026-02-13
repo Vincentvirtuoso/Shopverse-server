@@ -21,8 +21,8 @@ const metaFieldSchema = new mongoose.Schema(
       type: String,
       required: [true, "Field type is required."],
       enum: {
-        values: ["string", "number", "boolean", "array", "date"],
-        message: "Type must be one of: string, number, boolean, array, date.",
+        values: ["text", "number", "boolean", "array", "date"],
+        message: "Type must be one of: text, number, boolean, array, date.",
       },
     },
 
@@ -65,7 +65,7 @@ const metaFieldSchema = new mongoose.Schema(
       default: 0, // Admin-controlled display order
     },
   },
-  { _id: true }, // Keep _id so individual fields can be patched by id
+  { _id: true },
 );
 
 const subCategorySchema = new mongoose.Schema(
@@ -172,16 +172,12 @@ const categorySchema = new mongoose.Schema(
       },
     },
 
-    // ── Fallback category for product reassignment on deletion ────────────
-    // When this category is deleted, all its products are moved here.
-    // Super_admin sets this per category. Null = use the global default.
     fallbackCategory: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
       default: null,
     },
 
-    // ── Hierarchy (optional — for nested categories) ──────────────────────
     parent: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
@@ -195,7 +191,6 @@ const categorySchema = new mongoose.Schema(
       max: 3,
     },
 
-    // ── Display & status ──────────────────────────────────────────────────
     sortOrder: {
       type: Number,
       default: 0,
@@ -257,7 +252,7 @@ categorySchema.virtual("requiredMetaFieldCount").get(function () {
   return (this.metaFields || []).filter((f) => f.isRequired).length;
 });
 
-categorySchema.pre("save", function (next) {
+categorySchema.pre("save", function () {
   if (!this.slug && this.name) {
     this.slug = this.name
       .toLowerCase()
@@ -266,7 +261,6 @@ categorySchema.pre("save", function (next) {
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-");
   }
-  next();
 });
 
 categorySchema.methods.addSubCategory = function (subCatData) {

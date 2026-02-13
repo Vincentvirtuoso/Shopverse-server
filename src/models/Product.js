@@ -76,15 +76,28 @@ const productSchema = new mongoose.Schema(
       },
     ],
     category: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
       required: [true, "Category is required."],
-      trim: true,
       index: true,
     },
+
     subCategory: {
       type: String,
       trim: true,
+      lowercase: true,
       index: true,
+      default: null,
+    },
+    categoryMeta: {
+      type: Map,
+      of: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+
+    expiryDate: {
+      type: Date,
+      default: null,
     },
     stockCount: {
       type: Number,
@@ -204,7 +217,7 @@ const productSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  }
+  },
 );
 
 productSchema.index({ name: "text", description: "text", brand: "text" });
@@ -227,7 +240,7 @@ productSchema.pre("save", function (next) {
   if (this.originalPrice && this.originalPrice > 0 && this.price > 0) {
     if (this.price < this.originalPrice) {
       this.discount = Math.round(
-        ((this.originalPrice - this.price) / this.originalPrice) * 100
+        ((this.originalPrice - this.price) / this.originalPrice) * 100,
       );
     } else {
       this.discount = 0;

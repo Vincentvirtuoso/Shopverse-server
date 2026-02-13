@@ -24,22 +24,23 @@ const metaFieldSchema = Joi.object({
     .required()
     .messages({
       "string.pattern.base":
-        "Key must start with a letter and contain only letters, numbers, or underscores",
+        "Key must start with a lowercase letter and contain only letters, numbers, or underscores",
     }),
   label: Joi.string().required().trim(),
   type: Joi.string()
-    .valid("string", "number", "boolean", "array", "date")
+    .valid("text", "number", "boolean", "array", "date", "file", "select")
     .required(),
   unit: Joi.string().allow("", null).trim(),
+  description: Joi.string().allow("", null).trim(),
   placeholder: Joi.string().allow("", null).trim(),
-  options: Joi.array().items(Joi.string().trim()),
+  options: Joi.array().items(Joi.string().trim()).default([]),
   defaultValue: Joi.any(),
   isRequired: Joi.boolean().default(false),
   isFilterable: Joi.boolean().default(false),
   isSearchable: Joi.boolean().default(false),
   isVisibleOnProductPage: Joi.boolean().default(true),
   sortOrder: Joi.number().default(0),
-  _id: Joi.string(),
+  _id: Joi.string().allow(null, ""),
 });
 
 // Subcategory schema
@@ -66,7 +67,7 @@ const categorySchema = Joi.object({
   subCategories: Joi.array().items(subCategorySchema).default([]),
   metaFields: Joi.array().items(metaFieldSchema).default([]),
   fallbackCategory: objectIdSchema.allow(null).default(null),
-  parent: objectIdSchema.allow(null).default(null),
+  parent: objectIdSchema.allow("", null).default(null),
   level: Joi.number().min(0).max(3).default(0),
   sortOrder: Joi.number().default(0),
   isFeatured: Joi.boolean().default(false),

@@ -782,10 +782,12 @@ export const getAllCategories = catchAsync(async (req, res) => {
     search,
   } = req.query;
 
-  const query = { isArchived: false };
+  console.log("Query", req.query);
+
+  const query = { isArchived: { $ne: true } };
 
   if (parent !== undefined) {
-    query.parent = parent === "null" ? null : parent;
+    query.parent = parent === "null" || parent === null ? null : parent;
   }
   if (isActive !== undefined) {
     query.isActive = isActive === "true";
@@ -801,6 +803,8 @@ export const getAllCategories = catchAsync(async (req, res) => {
   }
 
   const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+  const test = await Category.find({});
+  console.log("Categories in DB:", test);
 
   const [categories, total] = await Promise.all([
     Category.find(query)
