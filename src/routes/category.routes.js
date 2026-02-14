@@ -66,7 +66,7 @@ router.patch("/:id/rename", renameCategory);
 
 router.delete("/:id", deleteCategory);
 
-router.patch("/reorder", reorderCategories);
+router.post("/reorder", reorderCategories);
 
 router.patch("/:id/status", updateCategoryStatus);
 

@@ -145,8 +145,17 @@ export const validateRenameMetaFieldKey = (data) => {
 
 export const validateReorder = (data) => {
   const schema = Joi.object({
-    ids: Joi.array().items(Joi.string().required()).min(1).required(),
+    ids: Joi.array()
+      .items(
+        Joi.string().length(24).hex().required().messages({
+          "string.hex": "Each category ID must be a valid hex string",
+          "string.length": "Each category ID must be 24 characters long",
+        }),
+      )
+      .min(1)
+      .required(),
   });
+
   return schema.validate(data, { abortEarly: false });
 };
 

@@ -206,10 +206,6 @@ const categorySchema = new mongoose.Schema(
       default: true,
       index: true,
     },
-
-    // ── Archived state (soft-delete before reassignment completes) ─────────
-    // When deletion is triggered: isArchived = true → reassign products →
-    // then hard delete. isArchived prevents new products being assigned here.
     isArchived: {
       type: Boolean,
       default: false,

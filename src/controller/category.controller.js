@@ -330,12 +330,22 @@ export const deleteCategory = catchAsync(async (req, res) => {
 });
 
 export const reorderCategories = catchAsync(async (req, res) => {
-  const { error, value } = validateReorder(req.body);
-  if (error) {
-    throw new AppError(error.details[0].message, 400, "VALIDATION_ERROR");
-  }
+  try {
+    const { error, value } = validateReorder(req.body);
+    if (error) {
+      throw new AppError(error.details[0].message, 400, "VALIDATION_ERROR");
+    }
 
-  await Category.reorderCategories(value.ids);
+    const existingCategories = await Category.find({
+      _id: { $in: value.ids },
+    });
+
+    if (existingCategories.length !== value.ids.length) {
+      await Category.reorderCategories(value.ids);
+    }
+  } catch (error) {
+    console.log(error);
+  }
 
   res.json({
     success: true,
@@ -582,6 +592,8 @@ export const removeSubCategory = catchAsync(async (req, res) => {
 });
 
 export const reorderSubCategories = catchAsync(async (req, res) => {
+  console.log(req.params);
+
   const { error: idError } = validateIdParam({ id: req.params.id });
   if (idError) {
     throw new AppError("Invalid category ID", 400, "INVALID_ID");
@@ -782,19 +794,19 @@ export const getAllCategories = catchAsync(async (req, res) => {
     search,
   } = req.query;
 
-  console.log("Query", req.query);
-
   const query = { isArchived: { $ne: true } };
 
   if (parent !== undefined) {
     query.parent = parent === "null" || parent === null ? null : parent;
   }
-  if (isActive !== undefined) {
+  if (isActive != null && isActive !== "null") {
     query.isActive = isActive === "true";
   }
-  if (isFeatured !== undefined) {
+
+  if (isFeatured != null && isFeatured !== "null") {
     query.isFeatured = isFeatured === "true";
   }
+
   if (search) {
     query.$or = [
       { name: { $regex: search, $options: "i" } },
@@ -803,8 +815,6 @@ export const getAllCategories = catchAsync(async (req, res) => {
   }
 
   const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
-  const test = await Category.find({});
-  console.log("Categories in DB:", test);
 
   const [categories, total] = await Promise.all([
     Category.find(query)
