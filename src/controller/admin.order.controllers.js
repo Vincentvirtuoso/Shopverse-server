@@ -432,7 +432,7 @@ export const getCustomerOrderInsights = catchAsync(async (req, res, next) => {
             $group: {
               _id: "$items.product",
               productName: { $first: "$product.name" },
-              category: { $first: "$product.category" },
+              category: { $first: "$product.category.name" },
               totalQuantity: { $sum: "$items.quantity" },
               totalSpent: {
                 $sum: { $multiply: ["$items.quantity", "$items.price.final"] },

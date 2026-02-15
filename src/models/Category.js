@@ -21,8 +21,9 @@ const metaFieldSchema = new mongoose.Schema(
       type: String,
       required: [true, "Field type is required."],
       enum: {
-        values: ["text", "number", "boolean", "array", "date"],
-        message: "Type must be one of: text, number, boolean, array, date.",
+        values: ["text", "number", "boolean", "array", "date", "select"],
+        message:
+          "Type must be one of: text, number, boolean, array, select, date.",
       },
     },
 
@@ -68,45 +69,6 @@ const metaFieldSchema = new mongoose.Schema(
   { _id: true },
 );
 
-const subCategorySchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: [true, "Subcategory name is required."],
-      trim: true,
-    },
-    slug: {
-      type: String,
-      required: [true, "Subcategory slug is required."],
-      trim: true,
-      lowercase: true,
-      match: [
-        /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-        "Slug must be lowercase alphanumeric with hyphens only.",
-      ],
-    },
-    description: { type: String, trim: true },
-    image: {
-      type: String,
-      trim: true,
-      validate: {
-        validator: (v) =>
-          !v || /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif|avif|svg)$/i.test(v),
-        message: (props) => `${props.value} is not a valid image URL.`,
-      },
-    },
-    sortOrder: {
-      type: Number,
-      default: 0,
-    },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-  },
-  { _id: true },
-);
-
 const categorySchema = new mongoose.Schema(
   {
     name: {
@@ -143,28 +105,11 @@ const categorySchema = new mongoose.Schema(
         message: (props) => `${props.value} is not a valid image URL.`,
       },
     },
-
-    // ── Subcategories (fully admin-managed) ───────────────────────────────
-    subCategories: {
-      type: [subCategorySchema],
-      default: [],
-      validate: {
-        validator: function (subs) {
-          // Slug must be unique within a category's subcategories
-          const slugs = subs.map((s) => s.slug);
-          return slugs.length === new Set(slugs).size;
-        },
-        message: "Subcategory slugs must be unique within a category.",
-      },
-    },
-
-    // ── Custom meta field definitions (admin-managed) ─────────────────────
     metaFields: {
       type: [metaFieldSchema],
       default: [],
       validate: {
         validator: function (fields) {
-          // Field key must be unique within a category's metaFields
           const keys = fields.map((f) => f.key);
           return keys.length === new Set(keys).size;
         },
@@ -240,10 +185,6 @@ categorySchema.virtual("fullSlug").get(function () {
   return this.slug;
 });
 
-categorySchema.virtual("activeSubCategoryCount").get(function () {
-  return (this.subCategories || []).filter((s) => s.isActive).length;
-});
-
 categorySchema.virtual("requiredMetaFieldCount").get(function () {
   return (this.metaFields || []).filter((f) => f.isRequired).length;
 });
@@ -258,54 +199,6 @@ categorySchema.pre("save", function () {
       .replace(/-+/g, "-");
   }
 });
-
-categorySchema.methods.addSubCategory = function (subCatData) {
-  if (!subCatData.slug && subCatData.name) {
-    subCatData.slug = subCatData.name
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
-  }
-
-  const exists = this.subCategories.some((s) => s.slug === subCatData.slug);
-  if (exists) {
-    throw new Error(
-      `Subcategory slug "${subCatData.slug}" already exists in category "${this.name}".`,
-    );
-  }
-
-  if (subCatData.sortOrder === undefined) {
-    const max = this.subCategories.reduce(
-      (m, s) => Math.max(m, s.sortOrder || 0),
-      0,
-    );
-    subCatData.sortOrder = max + 1;
-  }
-
-  this.subCategories.push(subCatData);
-  return this.save();
-};
-
-categorySchema.methods.removeSubCategory = function (slug) {
-  const before = this.subCategories.length;
-  this.subCategories = this.subCategories.filter((s) => s.slug !== slug);
-  if (this.subCategories.length === before) {
-    throw new Error(
-      `Subcategory "${slug}" not found in category "${this.name}".`,
-    );
-  }
-  return this.save();
-};
-
-categorySchema.methods.reorderSubCategories = function (slugsInOrder) {
-  slugsInOrder.forEach((slug, index) => {
-    const sub = this.subCategories.find((s) => s.slug === slug);
-    if (sub) sub.sortOrder = index + 1;
-  });
-  return this.save();
-};
 
 categorySchema.methods.addMetaField = function (fieldData) {
   const exists = this.metaFields.some((f) => f.key === fieldData.key);
@@ -393,7 +286,6 @@ categorySchema.statics.safeDelete = async function (
     );
   }
 
-  // 3. Mark as archived (blocks new product assignments immediately)
   cat.isArchived = true;
   cat.archivedAt = new Date();
   cat.isActive = false;
@@ -404,7 +296,6 @@ categorySchema.statics.safeDelete = async function (
     {
       $set: {
         category: targetId,
-        subCategory: null, // subCategory is no longer valid for the new category
       },
     },
     opts,

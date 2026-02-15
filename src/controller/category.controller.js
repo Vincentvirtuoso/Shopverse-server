@@ -8,12 +8,10 @@ import {
 import {
   validateCreateCategory,
   validateUpdateCategory,
-  validateSubCategory,
   validateMetaField,
   validateRenameMetaFieldKey,
   validateReorder,
   validateIdParam,
-  validateSubCategorySlug,
   validateMetaFieldKey,
   validateSetFallbackCategory,
   validateSlugParam,
@@ -299,15 +297,6 @@ export const deleteCategory = catchAsync(async (req, res) => {
       }
     }
 
-    for (const subCategory of category.subCategories) {
-      if (subCategory.image) {
-        const publicId = getPublicIdFromUrl(subCategory.image);
-        if (publicId) {
-          await deleteFromCloudinary(publicId);
-        }
-      }
-    }
-
     const result = await Category.safeDelete(
       req.params.id,
       globalFallbackId,
@@ -418,201 +407,6 @@ export const setFallbackCategory = catchAsync(async (req, res) => {
 
   if (!category) {
     throw new AppError("Category not found", 404, "CATEGORY_NOT_FOUND");
-  }
-
-  res.json({
-    success: true,
-    data: category,
-  });
-});
-
-export const addSubCategory = catchAsync(async (req, res) => {
-  const { error: idError } = validateIdParam({ id: req.params.id });
-  if (idError) {
-    throw new AppError("Invalid category ID", 400, "INVALID_ID");
-  }
-
-  const bodyData = req.body.data ? JSON.parse(req.body.data) : req.body;
-
-  const { error, value } = validateSubCategory(bodyData);
-  if (error) {
-    throw new AppError(error.details[0].message, 400, "VALIDATION_ERROR");
-  }
-
-  const category = await Category.findById(req.params.id);
-  if (!category) {
-    throw new AppError("Category not found", 404, "CATEGORY_NOT_FOUND");
-  }
-
-  if (req.file) {
-    const { url } = await handleImageUpload(
-      req.file,
-      `categories/${category.slug}/subcategories`,
-    );
-    value.image = url;
-  }
-
-  try {
-    await category.addSubCategory(value);
-  } catch (err) {
-    if (value.image) {
-      const publicId = getPublicIdFromUrl(value.image);
-      if (publicId) {
-        await deleteFromCloudinary(publicId);
-      }
-    }
-    throw new AppError(err.message, 400, "ADD_SUBCATEGORY_FAILED");
-  }
-
-  res.status(201).json({
-    success: true,
-    data: category,
-  });
-});
-
-export const updateSubCategory = catchAsync(async (req, res) => {
-  const { error: idError } = validateIdParam({ id: req.params.id });
-  if (idError) {
-    throw new AppError("Invalid category ID", 400, "INVALID_ID");
-  }
-
-  const { error: slugError } = validateSubCategorySlug({
-    subCategorySlug: req.params.subCategorySlug,
-  });
-  if (slugError) {
-    throw new AppError("Invalid subcategory slug", 400, "INVALID_SLUG");
-  }
-
-  const bodyData = req.body.data ? JSON.parse(req.body.data) : req.body;
-
-  const { error, value } = validateSubCategory(bodyData);
-  if (error) {
-    throw new AppError(error.details[0].message, 400, "VALIDATION_ERROR");
-  }
-
-  const category = await Category.findById(req.params.id);
-  if (!category) {
-    throw new AppError("Category not found", 404, "CATEGORY_NOT_FOUND");
-  }
-
-  const subCategory = category.subCategories.find(
-    (s) => s.slug === req.params.subCategorySlug,
-  );
-
-  if (!subCategory) {
-    throw new AppError("Subcategory not found", 404, "SUBCATEGORY_NOT_FOUND");
-  }
-
-  if (req.file) {
-    if (subCategory.image) {
-      const oldPublicId = getPublicIdFromUrl(subCategory.image);
-      if (oldPublicId) {
-        await deleteFromCloudinary(oldPublicId);
-      }
-    }
-
-    const { url } = await handleImageUpload(
-      req.file,
-      `categories/${category.slug}/subcategories`,
-    );
-    value.image = url;
-  } else if (bodyData.image === "") {
-    if (subCategory.image) {
-      const publicId = getPublicIdFromUrl(subCategory.image);
-      if (publicId) {
-        await deleteFromCloudinary(publicId);
-      }
-    }
-    value.image = null;
-  }
-
-  if (value.slug && value.slug !== subCategory.slug) {
-    const exists = category.subCategories.some(
-      (s) =>
-        s.slug === value.slug &&
-        s._id.toString() !== subCategory._id.toString(),
-    );
-    if (exists) {
-      throw new AppError(
-        "Subcategory slug already exists in this category",
-        400,
-        "DUPLICATE_SLUG",
-      );
-    }
-  }
-
-  Object.assign(subCategory, value);
-  await category.save();
-
-  res.json({
-    success: true,
-    data: category,
-  });
-});
-
-export const removeSubCategory = catchAsync(async (req, res) => {
-  const { error: idError } = validateIdParam({ id: req.params.id });
-  if (idError) {
-    throw new AppError("Invalid category ID", 400, "INVALID_ID");
-  }
-
-  const { error: slugError } = validateSubCategorySlug({
-    subCategorySlug: req.params.subCategorySlug,
-  });
-  if (slugError) {
-    throw new AppError("Invalid subcategory slug", 400, "INVALID_SLUG");
-  }
-
-  const category = await Category.findById(req.params.id);
-  if (!category) {
-    throw new AppError("Category not found", 404, "CATEGORY_NOT_FOUND");
-  }
-
-  const subCategory = category.subCategories.find(
-    (s) => s.slug === req.params.subCategorySlug,
-  );
-
-  if (subCategory && subCategory.image) {
-    const publicId = getPublicIdFromUrl(subCategory.image);
-    if (publicId) {
-      await deleteFromCloudinary(publicId);
-    }
-  }
-
-  try {
-    await category.removeSubCategory(req.params.subCategorySlug);
-  } catch (err) {
-    throw new AppError(err.message, 404, "REMOVE_SUBCATEGORY_FAILED");
-  }
-
-  res.json({
-    success: true,
-    data: category,
-  });
-});
-
-export const reorderSubCategories = catchAsync(async (req, res) => {
-  console.log(req.params);
-
-  const { error: idError } = validateIdParam({ id: req.params.id });
-  if (idError) {
-    throw new AppError("Invalid category ID", 400, "INVALID_ID");
-  }
-
-  const { error, value } = validateReorder(req.body);
-  if (error) {
-    throw new AppError(error.details[0].message, 400, "VALIDATION_ERROR");
-  }
-
-  const category = await Category.findById(req.params.id);
-  if (!category) {
-    throw new AppError("Category not found", 404, "CATEGORY_NOT_FOUND");
-  }
-
-  try {
-    await category.reorderSubCategories(value.ids);
-  } catch (err) {
-    throw new AppError(err.message, 400, "REORDER_FAILED");
   }
 
   res.json({
@@ -796,7 +590,7 @@ export const getAllCategories = catchAsync(async (req, res) => {
 
   const query = { isArchived: { $ne: true } };
 
-  if (parent !== undefined) {
+  if (parent !== null && parent !== "null") {
     query.parent = parent === "null" || parent === null ? null : parent;
   }
   if (isActive != null && isActive !== "null") {
@@ -926,7 +720,6 @@ export const getActiveCategories = catchAsync(async (req, res) => {
   const categoriesWithCounts = categories.map((cat) => ({
     ...cat,
     productCount: countMap[cat._id.toString()] || 0,
-    activeSubCategoryCount: cat.activeSubCategoryCount,
   }));
 
   res.json({

@@ -89,7 +89,7 @@ const productSchema = new mongoose.Schema(
       index: true,
       default: null,
     },
-    categoryMeta: {
+    metaFields: {
       type: Map,
       of: mongoose.Schema.Types.Mixed,
       default: {},

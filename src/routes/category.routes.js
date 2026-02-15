@@ -7,10 +7,6 @@ import {
   reorderCategories,
   updateCategoryStatus,
   setFallbackCategory,
-  addSubCategory,
-  updateSubCategory,
-  removeSubCategory,
-  reorderSubCategories,
   addMetaField,
   updateMetaField,
   renameMetaFieldKey,
@@ -25,7 +21,7 @@ import {
 } from "../controller/category.controller.js";
 
 import { protect, restrictTo } from "../middleware/auth.middleware.js";
-import { uploadFields, uploadSingle } from "../config/multer.js";
+import { uploadFields } from "../config/multer.js";
 
 const router = express.Router();
 
@@ -71,18 +67,6 @@ router.post("/reorder", reorderCategories);
 router.patch("/:id/status", updateCategoryStatus);
 
 router.patch("/:id/fallback", setFallbackCategory);
-
-router.post("/:id/subcategories", uploadSingle("image"), addSubCategory);
-
-router.patch(
-  "/:id/subcategories/:subCategorySlug",
-  uploadSingle("image"),
-  updateSubCategory,
-);
-
-router.delete("/:id/subcategories/:subCategorySlug", removeSubCategory);
-
-router.patch("/:id/subcategories/reorder", reorderSubCategories);
 
 router.post("/:id/metafields", addMetaField);
 

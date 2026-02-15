@@ -190,7 +190,7 @@ export const getProducts = async (req, res) => {
       limit = 10,
       sort = "newest",
       categories,
-      subCategory,
+      category,
       brand,
       minPrice,
       maxPrice,
@@ -200,47 +200,82 @@ export const getProducts = async (req, res) => {
       minRating,
       sortBy,
       sortOrder,
+      // Meta fields filtering
+      metaFields,
     } = value;
 
     const query = { isActive: true };
 
+    // Handle category filtering (support both categories array and single category)
     if (categories) {
       const categoryArray = Array.isArray(categories)
         ? categories
         : categories.split(",");
       query.category = { $in: categoryArray };
+    } else if (category) {
+      query.category = category;
     }
 
-    if (subCategory) query.subCategory = subCategory;
+    // Brand filtering
     if (brand) query.brand = brand;
+
+    // Boolean flags
     if (isBestSeller !== undefined) query.isBestSeller = isBestSeller;
+
+    // Stock filtering
     if (inStock === true) query.inStock = true;
     if (inStock === false) query.inStock = false;
 
+    // Price range filtering
     if (minPrice !== undefined || maxPrice !== undefined) {
       query.price = {};
       if (minPrice !== undefined) query.price.$gte = minPrice;
       if (maxPrice !== undefined) query.price.$lte = maxPrice;
     }
 
+    // Rating filtering
     if (minRating !== undefined) {
       query.rating = { $gte: minRating };
     }
 
+    // Search functionality
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { brand: { $regex: search, $options: "i" } },
         { description: { $regex: search, $options: "i" } },
         { tags: { $regex: search, $options: "i" } },
-        { category: { $regex: search, $options: "i" } },
+        { sku: { $regex: search, $options: "i" } },
       ];
     }
 
+    // Meta fields filtering
+    if (metaFields) {
+      try {
+        const metaFilters =
+          typeof metaFields === "string" ? JSON.parse(metaFields) : metaFields;
+
+        Object.entries(metaFilters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            query[`metaFields.${key}`] = value;
+          }
+        });
+      } catch (e) {
+        console.warn("Invalid metaFields filter format:", e);
+      }
+    }
+
+    // Sorting logic
     let sortOption = {};
 
     if (sortBy) {
-      sortOption[sortBy] = sortOrder === "asc" ? 1 : -1;
+      // Handle meta field sorting
+      if (sortBy.startsWith("meta.")) {
+        const metaKey = sortBy.replace("meta.", "");
+        sortOption[`metaFields.${metaKey}`] = sortOrder === "asc" ? 1 : -1;
+      } else {
+        sortOption[sortBy] = sortOrder === "asc" ? 1 : -1;
+      }
     } else {
       switch (sort) {
         case "price_asc":
@@ -259,7 +294,11 @@ export const getProducts = async (req, res) => {
           sortOption = { name: 1 };
           break;
         case "featured":
-          sortOption = { isBestSeller: -1, isNewArrival: -1, isFeatured: -1 };
+          sortOption = {
+            isBestSeller: -1,
+            isFeatured: -1,
+            createdAt: -1,
+          };
           break;
         case "newest":
         default:
@@ -270,22 +309,36 @@ export const getProducts = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
+    // Execute queries
     const [products, total] = await Promise.all([
       Product.find(query)
         .sort(sortOption)
         .skip(skip)
         .limit(limit)
-        .populate("relatedProducts", "name price image"),
+        .populate("category", "name slug metaFields")
+        .populate("relatedProducts", "name price images brand"),
       Product.countDocuments(query),
     ]);
 
     const totalPages = Math.ceil(total / limit);
 
+    // Transform products to include category metaFields structure
+    const transformedProducts = products.map((product) => {
+      const productObj = product.toObject();
+
+      // Ensure metaFields is always an object
+      if (!productObj.metaFields) {
+        productObj.metaFields = {};
+      }
+
+      return productObj;
+    });
+
     res.status(200).json({
       success: true,
       message: "Products retrieved successfully",
       data: {
-        products,
+        products: transformedProducts,
         pagination: {
           total,
           page,
@@ -293,6 +346,13 @@ export const getProducts = async (req, res) => {
           totalPages,
           hasNextPage: page < totalPages,
           hasPrevPage: page > 1,
+        },
+        filters: {
+          categories: categories || category,
+          brand,
+          priceRange: { min: minPrice, max: maxPrice },
+          inStock,
+          minRating,
         },
       },
     });
@@ -305,6 +365,7 @@ export const getProducts = async (req, res) => {
     });
   }
 };
+
 export const getProductById = async (req, res) => {
   try {
     // Validate product ID

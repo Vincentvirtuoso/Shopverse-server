@@ -45,7 +45,7 @@ export const createProductSchema = Joi.object({
     Joi.string()
       .trim()
       .pattern(urlPattern)
-      .message("Each image must be a valid URL")
+      .message("Each image must be a valid URL"),
   ),
   category: Joi.string().required().trim().min(1).max(100),
   subCategory: Joi.string().trim().max(100).allow("", null),
@@ -66,6 +66,7 @@ export const createProductSchema = Joi.object({
   warranty: Joi.string().trim().allow("", null),
   features: Joi.array().items(Joi.string().trim()),
   specifications: Joi.object().pattern(/^/, Joi.any()),
+  metaFields: Joi.object().pattern(/^/, Joi.any()),
   weight: weightSchema,
   dimensions: dimensionsSchema,
   shippingInfo: Joi.object({
@@ -95,7 +96,7 @@ export const updateProductSchema = Joi.object({
     Joi.string()
       .trim()
       .pattern(urlPattern)
-      .message("Each image must be a valid URL")
+      .message("Each image must be a valid URL"),
   ),
   category: Joi.string().trim().min(1).max(100),
   subCategory: Joi.string().trim().max(100).allow("", null),
@@ -104,7 +105,7 @@ export const updateProductSchema = Joi.object({
     "in-stock",
     "limited",
     "out-of-stock",
-    "pre-order"
+    "pre-order",
   ),
   unit: Joi.string().valid(
     "piece",
@@ -115,7 +116,7 @@ export const updateProductSchema = Joi.object({
     "lb",
     "oz",
     "liter",
-    "ml"
+    "ml",
   ),
   isBestSeller: Joi.boolean(),
   tags: Joi.array().items(Joi.string().trim().lowercase()),
@@ -151,7 +152,7 @@ export const updateProductSchema = Joi.object({
       sku: Joi.string().allow("", null),
       stockCount: Joi.number().min(0).default(0),
       attributes: Joi.object().pattern(/^/, Joi.string()),
-    })
+    }),
   ),
 
   inStock: Joi.boolean(),
@@ -178,12 +179,12 @@ export const productQuerySchema = Joi.object({
       "rating",
       "name",
       "featured",
-      "discount"
+      "discount",
     )
     .default("newest"),
   categories: Joi.alternatives().try(
     Joi.string(),
-    Joi.array().items(Joi.string())
+    Joi.array().items(Joi.string()),
   ),
   subCategory: Joi.string(),
   brand: Joi.string(),
