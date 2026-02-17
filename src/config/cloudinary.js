@@ -15,6 +15,7 @@ const uploadToCloudinary = async (file, folder = "products", options = {}) => {
     const uploadOptions = {
       folder: folder,
       resource_type: "auto",
+format: "png",
       ...options,
     };
 
