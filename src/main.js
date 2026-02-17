@@ -13,6 +13,7 @@ import orderRoutes from "./routes/order.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
 import customersRoutes from "./routes/customers.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
+import removeBGRoutes from "./routes/removeBg.route.js";
 
 dotenv.config();
 connectDB();
@@ -97,6 +98,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/setup", setupRoutes);
 app.use("/api/admin/customers", customersRoutes);
 app.use("/api/categories", categoryRoutes);
+app.use("/api/image", removeBGRoutes);
 
 app.get("/", (req, res) => {
   res.json({

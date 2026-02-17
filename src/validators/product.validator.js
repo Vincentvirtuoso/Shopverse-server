@@ -98,8 +98,6 @@ export const updateProductSchema = Joi.object({
       .pattern(urlPattern)
       .message("Each image must be a valid URL"),
   ),
-  category: Joi.string().trim().min(1).max(100),
-  subCategory: Joi.string().trim().max(100).allow("", null),
   stockCount: Joi.number().min(0),
   availabilityType: Joi.string().valid(
     "in-stock",

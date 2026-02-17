@@ -216,29 +216,23 @@ export const getProducts = async (req, res) => {
       query.category = category;
     }
 
-    // Brand filtering
     if (brand) query.brand = brand;
 
-    // Boolean flags
     if (isBestSeller !== undefined) query.isBestSeller = isBestSeller;
 
-    // Stock filtering
     if (inStock === true) query.inStock = true;
     if (inStock === false) query.inStock = false;
 
-    // Price range filtering
     if (minPrice !== undefined || maxPrice !== undefined) {
       query.price = {};
       if (minPrice !== undefined) query.price.$gte = minPrice;
       if (maxPrice !== undefined) query.price.$lte = maxPrice;
     }
 
-    // Rating filtering
     if (minRating !== undefined) {
       query.rating = { $gte: minRating };
     }
 
-    // Search functionality
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
@@ -249,7 +243,6 @@ export const getProducts = async (req, res) => {
       ];
     }
 
-    // Meta fields filtering
     if (metaFields) {
       try {
         const metaFilters =
@@ -265,11 +258,9 @@ export const getProducts = async (req, res) => {
       }
     }
 
-    // Sorting logic
     let sortOption = {};
 
     if (sortBy) {
-      // Handle meta field sorting
       if (sortBy.startsWith("meta.")) {
         const metaKey = sortBy.replace("meta.", "");
         sortOption[`metaFields.${metaKey}`] = sortOrder === "asc" ? 1 : -1;
@@ -309,7 +300,6 @@ export const getProducts = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    // Execute queries
     const [products, total] = await Promise.all([
       Product.find(query)
         .sort(sortOption)
@@ -458,6 +448,8 @@ export const updateProduct = async (req, res) => {
       }
 
       Object.assign(product, validatedData);
+      console.log(validatedData);
+      console.log("product", product);
 
       if (req.files?.mainImage) {
         const mainImageResult = await uploadToCloudinary(
