@@ -209,7 +209,11 @@ export const updateCategory = catchAsync(async (req, res) => {
     }
   }
 
-  Object.assign(category, value);
+  for (const key in value) {
+  if (value[key] !== undefined) {
+    category[key] = value[key];
+  }
+}
   await category.save();
 
   res.json({
