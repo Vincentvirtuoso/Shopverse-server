@@ -70,12 +70,12 @@ router.patch("/:id/fallback", setFallbackCategory);
 
 router.post("/:id/metafields", addMetaField);
 
+router.patch("/:id/metafields/reorder", reorderMetaFields);
+
 router.patch("/:id/metafields/:key", updateMetaField);
 
 router.patch("/:id/metafields/:key/rename", renameMetaFieldKey);
 
 router.delete("/:id/metafields/:key", removeMetaField);
-
-router.patch("/:id/metafields/reorder", reorderMetaFields);
 
 export default router;
