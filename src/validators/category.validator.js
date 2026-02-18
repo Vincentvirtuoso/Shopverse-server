@@ -116,11 +116,34 @@ export const validateCreateCategory = (data) => {
 };
 
 export const validateUpdateCategory = (data) => {
-  const schema = categorySchema.fork(
-    ["name", "slug", "subCategories", "metaFields"],
-    (field) => field.optional(),
-  );
-  return schema.validate(data, { abortEarly: false });
+  const updateSchema = Joi.object({
+    name: Joi.string().trim(),
+    slug: slugSchema,
+    description: Joi.string().allow("", null).trim(),
+    icon: Joi.alternatives().try(
+      Joi.string().uri().allow("", null),
+      Joi.string().valid("")
+    ),
+    image: imageUrlSchema,
+    fallbackCategory: objectIdSchema.allow(null),
+    parent: objectIdSchema.allow("", null),
+    level: Joi.number().min(0).max(3),
+    sortOrder: Joi.number(),
+    isFeatured: Joi.boolean(),
+    isActive: Joi.boolean(),
+    isArchived: Joi.boolean(),
+    archivedAt: Joi.date().allow(null),
+    meta: Joi.object({
+      title: Joi.string().allow("", null).trim(),
+      description: Joi.string().allow("", null).trim(),
+      keywords: Joi.array().items(Joi.string().trim()),
+    }),
+  });
+
+  return updateSchema.validate(data, {
+    abortEarly: false,
+    stripUnknown: true,
+  });
 };
 
 export const validateSubCategory = (data) => {
