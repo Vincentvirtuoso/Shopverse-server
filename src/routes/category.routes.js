@@ -25,23 +25,17 @@ import { uploadFields } from "../config/multer.js";
 
 const router = express.Router();
 
-router.get("/active", getActiveCategories);
-
-router.get("/hierarchy", getCategoryHierarchy);
-
-router.get("/slug/:slug", getCategoryBySlug);
-
-router.get("/:id/product-count", getProductCount);
-
-router.get("/:id", getCategoryById);
-
 router.get("/", getAllCategories);
+router.get("/active", getActiveCategories);
+router.get("/hierarchy", getCategoryHierarchy);
+router.get("/slug/:slug", getCategoryBySlug);
+router.get("/:id/product-count", getProductCount);
+router.get("/:id", getCategoryById);
 
 router.use(protect);
 router.use(restrictTo("admin", "super_admin"));
 
-router.post(
-  "/",
+router.route("/").post(
   uploadFields([
     { name: "image", maxCount: 1 },
     { name: "icon", maxCount: 1 },
@@ -49,33 +43,31 @@ router.post(
   createCategory,
 );
 
-router.patch(
-  "/:id",
-  uploadFields([
-    { name: "image", maxCount: 1 },
-    { name: "icon", maxCount: 1 },
-  ]),
-  updateCategory,
-);
+router
+  .route("/:id")
+  .patch(
+    uploadFields([
+      { name: "image", maxCount: 1 },
+      { name: "icon", maxCount: 1 },
+    ]),
+    updateCategory,
+  )
+  .delete(deleteCategory);
 
 router.patch("/:id/rename", renameCategory);
-
-router.delete("/:id", deleteCategory);
-
+router.patch("/:id/status", updateCategoryStatus);
+router.patch("/:id/fallback", setFallbackCategory);
 router.post("/reorder", reorderCategories);
 
-router.patch("/:id/status", updateCategoryStatus);
-
-router.patch("/:id/fallback", setFallbackCategory);
-
-router.post("/:id/metafields", addMetaField);
+router.route("/:id/metafields").post(addMetaField);
 
 router.patch("/:id/metafields/reorder", reorderMetaFields);
 
-router.patch("/:id/metafields/:key", updateMetaField);
+router
+  .route("/:id/metafields/:key")
+  .patch(updateMetaField)
+  .delete(removeMetaField);
 
 router.patch("/:id/metafields/:key/rename", renameMetaFieldKey);
-
-router.delete("/:id/metafields/:key", removeMetaField);
 
 export default router;

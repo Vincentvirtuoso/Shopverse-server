@@ -122,11 +122,11 @@ export const validateUpdateCategory = (data) => {
     description: Joi.string().allow("", null).trim(),
     icon: Joi.alternatives().try(
       Joi.string().uri().allow("", null),
-      Joi.string().valid("")
+      Joi.string().valid(""),
     ),
     image: imageUrlSchema,
     fallbackCategory: objectIdSchema.allow(null),
-    parent: objectIdSchema.allow("", null),
+    parent: Joi.alternatives().try(objectIdSchema, Joi.valid(null)),
     level: Joi.number().min(0).max(3),
     sortOrder: Joi.number(),
     isFeatured: Joi.boolean(),
@@ -138,6 +138,7 @@ export const validateUpdateCategory = (data) => {
       description: Joi.string().allow("", null).trim(),
       keywords: Joi.array().items(Joi.string().trim()),
     }),
+    metaFields: Joi.array().items(metaFieldSchema).default([]),
   });
 
   return updateSchema.validate(data, {

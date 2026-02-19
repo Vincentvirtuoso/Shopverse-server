@@ -194,26 +194,44 @@ export const updateCategory = catchAsync(async (req, res) => {
     }
   }
 
-  if (value.parent && value.parent !== category.parent?.toString()) {
-    const parentCategory = await Category.findById(value.parent);
-    if (!parentCategory) {
-      throw new AppError("Parent category not found", 404, "PARENT_NOT_FOUND");
-    }
-    value.level = (parentCategory.level || 0) + 1;
-    if (value.level > 3) {
-      throw new AppError(
-        "Maximum nesting level (3) exceeded",
-        400,
-        "MAX_LEVEL_EXCEEDED",
-      );
+  if (!value.parent) {
+    value.parent = null;
+  }
+
+  if (value.parent === null) {
+    value.level = 0;
+  }
+
+  if (value.parent !== category.parent?.toString()) {
+    if (value.parent === null) {
+      value.level = 0;
+    } else {
+      const parentCategory = await Category.findById(value.parent);
+      if (!parentCategory) {
+        throw new AppError(
+          "Parent category not found",
+          404,
+          "PARENT_NOT_FOUND",
+        );
+      }
+
+      value.level = (parentCategory.level || 0) + 1;
+
+      if (value.level > 3) {
+        throw new AppError(
+          "Maximum nesting level (3) exceeded",
+          400,
+          "MAX_LEVEL_EXCEEDED",
+        );
+      }
     }
   }
 
   for (const key in value) {
-  if (value[key] !== undefined) {
-    category[key] = value[key];
+    if (value[key] !== undefined) {
+      category[key] = value[key];
+    }
   }
-}
   await category.save();
 
   res.json({
