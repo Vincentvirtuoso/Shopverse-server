@@ -138,7 +138,7 @@ export const validateUpdateCategory = (data) => {
       description: Joi.string().allow("", null).trim(),
       keywords: Joi.array().items(Joi.string().trim()),
     }),
-    metaFields: Joi.array().items(metaFieldSchema).default([]),
+    metaFields: Joi.array().items(metaFieldSchema),
   });
 
   return updateSchema.validate(data, {
